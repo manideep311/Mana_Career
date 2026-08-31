@@ -57,7 +57,7 @@ Same as Phase 1a's Global Constraints section (uuid PKs `gen_random_uuid()`; `ti
 - `ProfileCertification` — common cols **plus** `name: str` (not null) · `issuer: str|None` · `issued_date/expires_date: date|None` · `credential_id: str|None` · `url: str|None`.
 - Migration `0004_career_profiles` (`down_revision = "0003_users"`): the five `CREATE TABLE`s, `uq_career_profiles_user_id`, an index `ix_<t>_profile_id` on each sub-entity, the CHECKs, and `CREATE TRIGGER trg_<t>_set_updated_at BEFORE UPDATE ... EXECUTE FUNCTION set_updated_at()` for all five.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/models/test_profile_models.py`:
 
@@ -153,11 +153,11 @@ async def test_experience_is_current_default_false(db_session):
     assert e.highlights == [] and e.tech == []
 ```
 
-- [ ] **Step 2: Run — expect fail** (`ModuleNotFoundError: app.models.profile`).
+- [x] **Step 2: Run — expect fail** (`ModuleNotFoundError: app.models.profile`).
 
 Run: `cd backend && uv run pytest tests/models/test_profile_models.py -q`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/models/profile.py`:
 
@@ -457,11 +457,11 @@ def downgrade() -> None:
         op.drop_table(tbl)
 ```
 
-- [ ] **Step 4: Run — expect pass** (DB-backed → run once Postgres is up; otherwise confirm `alembic history` is linear + `Base.metadata.tables` lists all five, + `ruff`/`mypy`).
+- [x] **Step 4: Run — expect pass** (DB-backed → run once Postgres is up; otherwise confirm `alembic history` is linear + `Base.metadata.tables` lists all five, + `ruff`/`mypy`).
 
 Run: `cd backend && uv run alembic upgrade head && uv run pytest tests/models/test_profile_models.py -q && uv run ruff check . && uv run mypy app`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/models/profile.py backend/app/models/__init__.py backend/alembic/versions/0004_career_profiles.py backend/tests/models/test_profile_models.py
@@ -498,7 +498,7 @@ git commit -m "feat(models): career_profiles + experience/education/project/cert
 
   `score` = sum of weights whose key is true (already 0–100). `missing` = human labels for false keys, in table order (`{"location": "Add your location", "links": "Add a GitHub, LinkedIn or portfolio link", ...}`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/domain/profile/test_strength.py`:
 
@@ -553,9 +553,9 @@ def test_links_true_if_any_url_present():
     assert r.score == 10
 ```
 
-- [ ] **Step 2: Run — expect fail** (`ModuleNotFoundError`).
+- [x] **Step 2: Run — expect fail** (`ModuleNotFoundError`).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/domain/profile/strength.py`:
 
@@ -627,11 +627,11 @@ def compute_strength(profile: CareerProfile, counts: ProfileCounts) -> StrengthR
     return StrengthResult(score=score, completeness=checks, missing=missing)
 ```
 
-- [ ] **Step 4: Run — expect pass** (pure, runs locally).
+- [x] **Step 4: Run — expect pass** (pure, runs locally).
 
 Run: `cd backend && uv run pytest tests/domain/profile/test_strength.py -q && uv run ruff check . && uv run mypy app`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/domain/profile/__init__.py backend/app/domain/profile/strength.py backend/tests/domain/profile/test_strength.py
@@ -661,7 +661,7 @@ git commit -m "feat(profile): deterministic profile-strength scorer"
   - private `async _recompute(self, profile: CareerProfile) -> None` — counts each section, calls `compute_strength`, writes `profile.profile_strength` + `profile.completeness`.
 - All mutating methods write an `audit_logs` row via `audit(...)` (`profile.update` for scalars; `profile.<section_singular>.<op>` for items) with `request_id=current_request_id()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/domain/profile/test_service.py`:
 
@@ -751,9 +751,9 @@ async def test_reorder_rejects_mismatched_id_set(db_session):
         await svc.reorder(uid, "education", [a.id, uuid.uuid4()])
 ```
 
-- [ ] **Step 2: Run — expect fail.**
+- [x] **Step 2: Run — expect fail.**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/domain/profile/service.py`:
 
@@ -947,11 +947,11 @@ class ProfileService:
         return [by_id[i] for i in ordered_ids]
 ```
 
-- [ ] **Step 4: Run — expect pass** (DB-backed; run once Postgres is up + `ruff`/`mypy`/`lint-imports`).
+- [x] **Step 4: Run — expect pass** (DB-backed; run once Postgres is up + `ruff`/`mypy`/`lint-imports`).
 
 Run: `cd backend && uv run pytest tests/domain/profile/test_service.py -q && uv run ruff check . && uv run lint-imports && uv run mypy app`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/domain/profile/service.py backend/tests/domain/profile/test_service.py
@@ -976,7 +976,7 @@ git commit -m "feat(profile): ProfileService — get-or-create, scalar update, s
 - `ReorderIn` — `ids: list[uuid.UUID]` (`min_length=1`).
 - `ProfileFullOut` — `CareerProfileOut` + `experiences/education/projects/certifications: list[...Out]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/api/test_profile_schemas.py`:
 
@@ -1023,15 +1023,15 @@ def test_reorder_in_requires_nonempty():
         ReorderIn(ids=[])
 ```
 
-- [ ] **Step 2: Run — expect fail.**
+- [x] **Step 2: Run — expect fail.**
 
-- [ ] **Step 3: Implement** `backend/app/api/v1/schemas/profile.py` per the interface above. Key points: reuse one `_http_url` module function in each url field's `field_validator`; `*In` models set `model_config = ConfigDict(extra="forbid")`; date fields typed `datetime.date | None`.
+- [x] **Step 3: Implement** `backend/app/api/v1/schemas/profile.py` per the interface above. Key points: reuse one `_http_url` module function in each url field's `field_validator`; `*In` models set `model_config = ConfigDict(extra="forbid")`; date fields typed `datetime.date | None`.
 
-- [ ] **Step 4: Run — expect pass** (pure; local).
+- [x] **Step 4: Run — expect pass** (pure; local).
 
 Run: `cd backend && uv run pytest tests/api/test_profile_schemas.py -q && uv run ruff check . && uv run mypy app`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/api/v1/schemas/profile.py backend/tests/api/test_profile_schemas.py
@@ -1054,7 +1054,7 @@ git commit -m "feat(api): career-profile request/response schemas"
 - `GET /profile/strength` → `StrengthOut` — recompute-free read from the stored `completeness` + a re-derived `missing` (call `compute_strength` with fresh counts so `missing` is always current).
 - All three depend on `CurrentUser`. Registered before the sub-entity routers in Task 6.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/api/test_profile.py`:
 
@@ -1107,13 +1107,13 @@ async def test_strength_endpoint_lists_missing(client):
     assert "Add your work experience" in r.json()["missing"]
 ```
 
-- [ ] **Step 2: Run — expect fail** (404s / module missing).
+- [x] **Step 2: Run — expect fail** (404s / module missing).
 
-- [ ] **Step 3: Implement** the three routes; wire `api_router.include_router(profile.router)` in `router.py` (after `auth`).
+- [x] **Step 3: Implement** the three routes; wire `api_router.include_router(profile.router)` in `router.py` (after `auth`).
 
-- [ ] **Step 4: Run — expect pass** (DB-backed; run with Postgres + `ruff`/`mypy`/`lint-imports`).
+- [x] **Step 4: Run — expect pass** (DB-backed; run with Postgres + `ruff`/`mypy`/`lint-imports`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/api/v1/profile.py backend/app/api/v1/router.py backend/tests/api/test_profile.py
@@ -1140,7 +1140,7 @@ git commit -m "feat(api): /profile — get full profile, update scalars, strengt
 
 > **Schema addition (fold into Task 4 if not yet done):** `ExperiencePatch`, `EducationPatch`, `ProjectPatch`, `CertificationPatch` — same fields as the `*In` models but every field `Optional` with no defaults, `model_config = ConfigDict(extra="forbid")`. Register in `SUBENTITY_SCHEMAS` as a third tuple element `(In, Out, Patch)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `backend/tests/api/test_profile_subentities.py`:
 
@@ -1225,13 +1225,13 @@ async def test_creating_experience_bumps_strength(client):
     assert prof.json()["profile_strength"] == 20
 ```
 
-- [ ] **Step 2: Run — expect fail.**
+- [x] **Step 2: Run — expect fail.**
 
-- [ ] **Step 3: Implement** `_make_subentity_router`. Use closures over `section`; pull `(In, Out, Patch)` from `SUBENTITY_SCHEMAS`. `response_model` per route from `Out`. Keep the factory < 60 lines.
+- [x] **Step 3: Implement** `_make_subentity_router`. Use closures over `section`; pull `(In, Out, Patch)` from `SUBENTITY_SCHEMAS`. `response_model` per route from `Out`. Keep the factory < 60 lines.
 
-- [ ] **Step 4: Run — expect pass** (DB-backed; Postgres + `ruff`/`mypy`/`lint-imports`).
+- [x] **Step 4: Run — expect pass** (DB-backed; Postgres + `ruff`/`mypy`/`lint-imports`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/api/v1/profile.py backend/app/api/v1/schemas/profile.py backend/tests/api/test_profile_subentities.py
@@ -1242,31 +1242,40 @@ git commit -m "feat(api): generic /profile sub-entity CRUD + reorder for the fou
 
 ## Task 7: Phase 1b verification & report
 
-- [ ] **Step 1: Full backend gate**
+- [x] **Step 1: Full backend gate**
 
 Run: `cd backend && uv run ruff check . && uv run lint-imports && uv run mypy app && uv run pytest -q`
 Expected: ruff clean; import-linter 2 contracts kept; mypy clean; pytest all green (Phase 0 + 1a + 1b) once Postgres is available.
 
-- [ ] **Step 2: OpenAPI sanity**
+- [x] **Step 2: OpenAPI sanity**
 
 Run: `cd backend && uv run python -c "from app.main import create_app; print(sorted(p for p in create_app().openapi()['paths'] if '/profile' in p))"`
 Expected: `/api/v1/profile`, `/api/v1/profile/strength`, and `.../{experiences,education,projects,certifications}` + `.../{section}/{item_id}` + `.../{section}/reorder`.
 
-- [ ] **Step 3: Fill the completion report below** (what changed, files, test count, deviations).
+- [x] **Step 3: Fill the completion report below** (what changed, files, test count, deviations).
 
-- [ ] **Step 4: Commit** `docs: Phase 1b completion report`.
+- [x] **Step 4: Commit** `docs: Phase 1b completion report`.
 
 ---
 
-## Phase 1b completion report (fill in when done)
+## Phase 1b completion report — 2026-08-31
 
-- **What changed:** _[list]_
-- **Why:** the structured career profile + a live strength score is what the dashboard's "profile strength" and the Phase 5 matcher read from; the four sub-entity resources are the editable spine of the Résumé Workspace.
-- **Files changed:** _[list]_
+- **What changed:**
+  - `models/profile.py`: `CareerProfile` (one per user, unique `user_id`) + `ProfileExperience` / `ProfileEducation` / `ProfileProject` / `ProfileCertification` sharing a `_SubEntity` mixin (`user_id`, `profile_id`, `source`, `order_index`). Migration `0004_career_profiles` — five tables, indexes, CHECKs, `updated_at` triggers.
+  - `domain/profile/strength.py`: pure `compute_strength(profile, ProfileCounts) -> StrengthResult` — weighted 11-point checklist summing to 100, plus a completeness map and a "what's missing" list.
+  - `domain/profile/service.py`: `ProfileService` — `get_or_create`, `load_full`, `update_scalars` (whitelisted), `list_section`, `add_item` / `update_item` / `delete_item` (user-scoped, 404 on cross-user), `reorder` (exact-permutation check), `_recompute` after every mutation, audit row per mutation.
+  - `api/v1/schemas/profile.py`: `CareerProfileUpdate` (partial, `extra="forbid"`), `CareerProfileOut`, `StrengthOut`, `ProfileFullOut`, per-section `In`/`Out`/`Patch`, `ReorderIn`, and a `SUBENTITY_SCHEMAS` registry keyed like the service's model registry.
+  - `api/v1/profile.py`: `GET /profile` (full, auto-creates), `PUT /profile` (partial + rescored), `GET /profile/strength`, and `_make_subentity_router()` — one factory building list / create / patch / delete / reorder for all four sections; wired in `router.py`.
+- **Why:** the structured profile + a live strength score is what the dashboard "profile strength" and the Phase 5 matcher read from; the four sub-entity resources are the editable spine of the Résumé Workspace.
+- **Files changed:** 6 new source files + `app/models/__init__.py`, `app/api/v1/router.py`; 6 new test files. Merged to `main` as 3 commits (`5fbb333` schema · `c590dcd` domain · `e896313` API).
+- **Verification (CI, `manideep311/Mana_Career` on `main`):** `ruff` / `lint-imports` (2 contracts kept) / `mypy app` (49 files) all clean; `pytest` **128 passed**, coverage **92.25%** (floor 55); frontend `3 passed`. Local `backend/.venv` runs ruff/mypy/import-linter + 38 offline tests; DB-backed tests run in CI only (no local Postgres).
 - **How to test:** `cd backend && uv run pytest tests/api/test_profile.py tests/api/test_profile_subentities.py -q`.
-- **Regression check:** Phase 0 + 1a suites still green; `/auth/*` and `/health*` unchanged; `lint-imports` still 2 contracts kept; migration chain `0001→0002→0003→0004` linear.
-- **Baseline:** _[N backend tests, M% coverage]_
-- **Deviations:** _[list]_
+- **Regression check:** Phase 0 + 1a tests still green; `/auth/*` and `/health*` unchanged; migration chain `0001→0002→0003→0004` linear.
+- **Deviations from the plan:**
+  1. `tests/**/__init__.py` package markers skipped (rootless test layout, same as Phase 1a).
+  2. `email-validator` still absent — Task 4 used the plan's own no-dep fallback path implicitly (Pydantic `str` fields; no `EmailStr` needed here anyway).
+  3. CI's first run of the new tests surfaced three fixes folded into commit `e896313`: `test_service.py` → `test_profile_service.py` (rootless-layout basename clash with the auth service test); `salary_period` CHECK test value shortened so it doesn't overflow `varchar(8)` before the constraint fires; `list[out]` in the sub-entity factory built via `list.__class_getitem__` to keep mypy strict happy.
+  4. `_make_subentity_router` factory used (as the plan's Task 6 intended) so the four sections share one implementation; `PATCH` uses per-section `*Patch` models.
 
 ---
 
