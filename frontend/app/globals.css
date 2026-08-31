@@ -13,12 +13,19 @@
   --color-danger: var(--danger);
   --color-border: var(--border);
   --radius-card: var(--radius);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive-soft: var(--positive-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: var(--danger-fg);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-text-subtle: var(--text-subtle);
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Inter, Geist, Manrope, system-ui, sans-serif;
+  font-family: var(--font-inter), Geist, Manrope, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
