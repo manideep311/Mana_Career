@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import os
 import subprocess
 import sys
@@ -20,6 +21,10 @@ os.environ.setdefault("REFRESH_COOKIE_SECURE", "false")
 os.environ.setdefault("LLM_PROVIDER", "fake")
 os.environ.setdefault("EMBEDDINGS_PROVIDER", "fake")
 os.environ.setdefault("EMBED_DIM", "1024")
+
+# Each `client` fixture instance gets its own source IP so the per-IP auth
+# rate-limit bucket (10/min) does not carry across tests when Redis is real (CI).
+_client_ip_seq = itertools.count(1)
 
 
 @pytest.fixture(scope="session")
@@ -74,9 +79,12 @@ async def client(db_session: object) -> AsyncIterator[object]:
 
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db_session
+    n = next(_client_ip_seq)
+    ip = f"10.{n >> 16 & 255}.{n >> 8 & 255}.{n & 255}"
     async with LifespanManager(app):
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
+            transport=ASGITransport(app=app, client=(ip, 12345)),
+            base_url="http://test",
         ) as c:
             yield c
 
