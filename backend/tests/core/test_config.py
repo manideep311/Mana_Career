@@ -1,0 +1,46 @@
+import pytest
+from pydantic import SecretStr
+
+from app.core.config import Settings, get_settings
+
+
+def _env(**over: str) -> dict[str, str]:
+    base = {
+        "DATABASE_URL": "postgresql+asyncpg://u:p@h/db",
+        "DATABASE_URL_TEST": "postgresql+asyncpg://u:p@h/db_test",
+        "REDIS_URL": "redis://h:6379/0",
+        "JWT_SECRET": "s3cr3t",
+    }
+    base.update(over)
+    return base
+
+
+def test_loads_from_env(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env(ENV="dev", EMBED_DIM="1024").items():
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.env == "dev"
+    assert s.embed_dim == 1024
+    assert s.llm_provider == "fake"
+
+
+def test_secret_fields_are_not_plaintext_in_repr(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env().items():
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert isinstance(s.jwt_secret, SecretStr)
+    assert "s3cr3t" not in repr(s)
+    assert s.jwt_secret.get_secret_value() == "s3cr3t"
+
+
+def test_cors_origins_parsed_as_list(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env(CORS_ORIGINS="http://a.com,http://b.com").items():
+        monkeypatch.setenv(k, v)
+    assert Settings().cors_origins == ["http://a.com", "http://b.com"]
+
+
+def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env().items():
+        monkeypatch.setenv(k, v)
+    get_settings.cache_clear()
+    assert get_settings() is get_settings()

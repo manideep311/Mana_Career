@@ -1,0 +1,14 @@
+[importlinter]
+root_package = app
+
+# Layers are added as each phase creates them. Parenthesised names are
+# optional layers (no error while the module does not yet exist).
+[importlinter:contract:layers]
+name = Mana Career layered architecture
+type = layers
+layers =
+    (app.api)
+    (app.worker)
+    (app.domain)
+    app.core
+    app.models
