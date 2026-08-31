@@ -11,9 +11,12 @@ export class ProblemError extends Error {
   }
 }
 
+export type Fetcher = <T>(path: string, init?: RequestInit) => Promise<T>;
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: "include",
     headers: { Accept: "application/json", ...(init?.headers ?? {}) },
   });
   if (res.status === 204) return undefined as T;
