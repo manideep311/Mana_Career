@@ -55,3 +55,9 @@ def configure_logging(settings: Settings) -> None:
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     return structlog.get_logger(name)
+
+
+def current_request_id() -> str | None:
+    """The request id bound by RequestIDMiddleware, or None outside a request."""
+    value = structlog.contextvars.get_contextvars().get("request_id")
+    return value if isinstance(value, str) else None

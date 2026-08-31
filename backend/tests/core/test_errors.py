@@ -61,3 +61,13 @@ async def test_rate_limited_sets_retry_after_header(client: AsyncClient):
     assert r.status_code == 429
     assert r.headers["retry-after"] == "30"
     assert r.json()["code"] == "rate_limited"
+
+
+def test_code_override_flows_into_problem():
+    p = to_problem(AppError(detail="dup", code="email_taken"), instance="/x")
+    assert p["code"] == "email_taken"
+    assert p["status"] == 500  # class default preserved
+
+
+def test_code_defaults_to_class_attr():
+    assert to_problem(NotFoundError(), instance="/x")["code"] == "not_found"

@@ -23,10 +23,13 @@ class AppError(Exception):
         detail: str | None = None,
         *,
         errors: list[dict[str, Any]] | None = None,
+        code: str | None = None,
     ) -> None:
         super().__init__(detail or self.title)
         self.detail = detail
         self.errors = errors
+        if code is not None:
+            self.code = code
 
 
 class NotFoundError(AppError):

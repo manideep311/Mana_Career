@@ -44,3 +44,20 @@ def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv(k, v)
     get_settings.cache_clear()
     assert get_settings() is get_settings()
+
+
+def test_refresh_cookie_defaults(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env().items():
+        monkeypatch.setenv(k, v)
+    # conftest sets REFRESH_COOKIE_SECURE=false process-wide for the test client;
+    # this test checks the code default, so clear the ambient value first.
+    monkeypatch.delenv("REFRESH_COOKIE_SECURE", raising=False)
+    s = Settings()
+    assert s.refresh_cookie_name == "mana_refresh"
+    assert s.refresh_cookie_secure is True
+
+
+def test_refresh_cookie_secure_env_override(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env(REFRESH_COOKIE_SECURE="false").items():
+        monkeypatch.setenv(k, v)
+    assert Settings().refresh_cookie_secure is False

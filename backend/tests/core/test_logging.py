@@ -4,7 +4,12 @@ import pytest
 import structlog
 
 from app.core.config import Settings
-from app.core.logging import configure_logging, get_logger, redact_secrets
+from app.core.logging import (
+    configure_logging,
+    current_request_id,
+    get_logger,
+    redact_secrets,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -43,3 +48,17 @@ def test_json_output_in_prod(prod_settings: Settings, capsys: pytest.CaptureFixt
     assert record["event"] == "hello"
     assert record["api_key"] == "***"
     assert record["level"] == "info"
+
+
+def test_current_request_id_none_outside_request():
+    structlog.contextvars.clear_contextvars()
+    assert current_request_id() is None
+
+
+def test_current_request_id_reads_bound_value():
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(request_id="req-42")
+    try:
+        assert current_request_id() == "req-42"
+    finally:
+        structlog.contextvars.clear_contextvars()

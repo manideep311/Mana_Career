@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     jwt_access_ttl_seconds: int = 900
     jwt_refresh_ttl_seconds: int = 2_592_000
 
+    refresh_cookie_name: str = "mana_refresh"
+    refresh_cookie_secure: bool = True
+
     rate_limit_default_per_minute: int = 240
 
     llm_provider: Literal["fake", "anthropic", "openai", "gemini"] = "fake"
