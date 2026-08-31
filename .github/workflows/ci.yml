@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: mana
+          POSTGRES_PASSWORD: mana
+          POSTGRES_DB: mana
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mana" --health-interval 3s
+          --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 3s
+          --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
+      DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-secret
+      # Phase 0 floor; Phase 13 (testing + security) tightens this.
+      PYTEST_ADDOPTS: "--cov-fail-under=55"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --frozen
+      - run: PGPASSWORD=mana psql -h localhost -U mana -d mana -c 'CREATE DATABASE mana_test;' || true
+      - run: uv run ruff check .
+      - run: uv run lint-imports
+      - run: uv run mypy app
+      - run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test run

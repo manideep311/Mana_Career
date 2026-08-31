@@ -1,0 +1,25 @@
+:root {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --text: #1f2430;
+  --text-muted: #5b6472;
+  --accent: #4f46e5;
+  --accent-fg: #ffffff;
+  --positive: #1f9d5b;
+  --warning: #c9820a;
+  --danger: #d1453b;
+  --border: #e7e3dc;
+  --ring: rgba(79, 70, 229, 0.4);
+  --radius: 14px;
+  --shadow-1: 0 1px 2px rgba(31, 36, 48, 0.06), 0 1px 3px rgba(31, 36, 48, 0.04);
+  --shadow-2: 0 4px 12px rgba(31, 36, 48, 0.08);
+}
+
+/*
+ * Dark theme lands in a later phase. Keep the token *names* stable; only the
+ * values change here.
+ *
+ * @media (prefers-color-scheme: dark) {
+ *   :root { --bg: #15171c; --surface: #1d2027; --text: #edeef1; ... }
+ * }
+ */

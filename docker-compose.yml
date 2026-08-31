@@ -1,0 +1,65 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: mana
+      POSTGRES_PASSWORD: mana
+      POSTGRES_DB: mana
+    ports: ["5432:5432"]
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mana"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: { context: ./backend, target: dev }
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mana:mana@db:5432/mana
+      DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@db:5432/mana_test
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    volumes: ["./backend:/app"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: { context: ./backend, target: dev }
+    command: uv run arq app.worker.main.WorkerSettings
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mana:mana@db:5432/mana
+      REDIS_URL: redis://redis:6379/0
+    volumes: ["./backend:/app"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    build: { context: ./frontend, target: dev }
+    command: pnpm dev
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports: ["3000:3000"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on: [api]
+
+volumes:
+  dbdata:

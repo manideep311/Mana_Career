@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
@@ -19,21 +22,24 @@ os.environ.setdefault("EMBED_DIM", "1024")
 
 
 @pytest.fixture(scope="session")
-def anyio_backend() -> str:
-    return "asyncio"
+def _migrated() -> None:
+    """Bring the test database to head once per session.
+
+    Runs Alembic in a subprocess so its own ``asyncio.run`` in env.py does not
+    nest inside pytest-asyncio's running loop.
+    """
+    backend_dir = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        check=True,
+    )
 
 
 @pytest.fixture(scope="session")
-async def db_engine() -> AsyncIterator[object]:
-    from alembic import command
-    from alembic.config import Config
-
+async def db_engine(_migrated: None) -> AsyncIterator[object]:
     from app.core.config import get_settings
     from app.core.db import make_engine
-
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
-    command.upgrade(cfg, "head")
 
     eng = make_engine(get_settings().database_url)
     yield eng
