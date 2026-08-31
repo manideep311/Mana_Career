@@ -3136,7 +3136,7 @@ Per spec §9 / brief §26:
 
 **Baseline recorded:** 26 backend unit tests + 3 frontend tests green locally; 13 backend DB-backed tests green in CI only; partial-run coverage 61% (CI `--cov-fail-under` currently 55, plan target 70 — tightened in Phase 13).
 
-**Open on the user:** `git push` the branch and confirm the `ci` workflow's `backend` + `frontend` jobs both pass (this is the authoritative check for the 13 DB-backed tests). Then verify `docker compose ps` all-healthy + `./scripts/smoke.sh` on a machine with Docker.
+**Update 2026-08-31:** pushed to `manideep311/Mana_Career`; the `ci` workflow's `backend` + `frontend` jobs both pass on `main` (backend `90 passed`, 89.64% coverage — Phase 0 + Phase 1a). CI's first run exposed three latent issues fixed in `fb3de7a` / `87180ce` / `77d8f5a` (see the Phase 1a plan's completion report). Still open: `docker compose ps` all-healthy + `./scripts/smoke.sh` on a machine with a working Docker engine (the dev machine has Docker Desktop but no WSL2).
 
 - **Regression check:** none (first phase).
 

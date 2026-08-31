@@ -1789,7 +1789,7 @@ git commit -m "docs: Phase 1a completion report"
 - **Local verification (this machine — no `uv`, no Postgres/Redis; tools run via `backend/.venv/Scripts/`):**
   - `ruff check .` ✅ · `lint-imports` ✅ 2 contracts kept · `mypy app` ✅ 43 files.
   - `pytest`: **47 infra-independent tests pass** (Phase 0's 26 + 21 new: config +2, errors +2, logging +2, passwords 4, tokens 5, auth_schemas 6).
-  - **43 DB-backed tests** (`test_service` 10, `test_auth_models` 6, `test_current_user_dep` 4, `test_auth` 10, + Phase 0's 13) error locally on the `_migrated` fixture (`subprocess.CalledProcessError`, no Postgres). They collect cleanly and are **gated to GitHub Actions CI**, which provisions `pgvector/pgvector:pg16` + `redis:7`. **Not yet observed green — pending push.**
+  - **DB-backed tests** error locally on the `_migrated` fixture (no Postgres). **Verified green in GitHub Actions CI on 2026-08-31** (`manideep311/Mana_Career`, run on `main` @ `77d8f5a`): `90 passed, coverage 89.64%` for the backend job (all Phase 0 + Phase 1a tests), `3 passed` frontend. Getting there took three fixes to latent Phase 0 issues that CI exposed on its first-ever run: `fb3de7a` (frontend CI Node 20 → 22), `87180ce` (`asyncio_default_test_loop_scope = "session"` — session-scoped `db_engine` vs per-function test loops), `77d8f5a` (per-`client` source IP so the real-Redis auth rate-limit doesn't bleed across tests; migration tests reuse the shared engine).
   - OpenAPI: all 6 `/api/v1/auth/*` paths present.
 - **Deviations from the written plan:**
   1. **No `tests/**/__init__.py`** — repo uses a rootless test layout; the plan's package-marker steps were skipped. Test basenames are unique.
