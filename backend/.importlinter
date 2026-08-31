@@ -12,3 +12,12 @@ layers =
     (app.domain)
     app.core
     app.models
+
+[importlinter:contract:domain-isolation]
+name = domain must not import api or worker
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    app.api
+    app.worker
