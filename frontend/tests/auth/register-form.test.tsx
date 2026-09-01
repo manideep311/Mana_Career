@@ -21,7 +21,7 @@ describe("RegisterForm", () => {
         password: "correct-passphrase",
       }),
     );
-    expect(mockPush).toHaveBeenCalledWith("/dashboard");
+    expect(mockPush).toHaveBeenCalledWith("/resume");
   });
 
   it("shows an email error when the address is already registered", async () => {

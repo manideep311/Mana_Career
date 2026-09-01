@@ -2,6 +2,7 @@ import {
   Briefcase,
   FileText,
   House,
+  ScrollText,
   Sparkles,
   User,
   type LucideIcon,
@@ -22,6 +23,7 @@ export interface NavItem {
  */
 export const NAV: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: House, ready: true },
+  { href: "/resume", label: "Résumé", icon: ScrollText, ready: true },
   { href: "/jobs", label: "Jobs", icon: Briefcase, ready: false },
   { href: "/applications", label: "Applications", icon: FileText, ready: false },
   { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },

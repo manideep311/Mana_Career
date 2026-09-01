@@ -35,7 +35,7 @@ export function RegisterForm() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await registerUser(values);
-      router.push("/dashboard");
+      router.push("/resume");
     } catch (err) {
       if (err instanceof ProblemError && err.code === "email_taken") {
         setError("email", { message: "That email is already registered." });

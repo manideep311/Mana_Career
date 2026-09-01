@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "@/components/common/ErrorState";
 import { StrengthMeter } from "@/components/common/StrengthMeter";
+import { SetupProfileCard } from "@/components/resume/SetupProfileCard";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +29,16 @@ export default function DashboardPage() {
     queryFn: () => api.profile.strength(),
   });
 
+  const resumesQuery = useQuery({
+    queryKey: qk.resumes,
+    queryFn: () => api.resumes.list(),
+  });
+
+  const showSetupCard =
+    !!resumesQuery.data &&
+    (resumesQuery.data.length === 0 ||
+      resumesQuery.data.every((r) => !r.confirmed_at));
+
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">
@@ -38,6 +49,8 @@ export default function DashboardPage() {
           Here&apos;s where you stand in your career journey.
         </p>
       </header>
+
+      {showSetupCard ? <SetupProfileCard /> : null}
 
       {strength.isPending ? (
         <div className="flex flex-col gap-4">
