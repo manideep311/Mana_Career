@@ -938,16 +938,82 @@ If `ANTHROPIC_API_KEY` is set: a one-off `scripts/smoke_extract.py` that runs `R
 
 ---
 
-## Phase 2a completion report (fill in when done)
+## Phase 2a completion report
 
-- **What changed:** _[list]_
-- **Why:** résumé → structured extraction is the on-ramp — every later phase (matching, tailoring, the agent) reads the profile this builds; it's also the project's first real LLM call.
-- **Files changed / new deps:** _[list; `pypdf`, `filetype`, `anthropic`, `sse-starlette`]_
-- **How to test:** `cd backend && "$UV" run pytest tests/domain/resume tests/api/test_resumes.py tests/worker/test_resume_tasks.py -q`.
-- **Regression check:** Phase 0/1a/1b suites green; migration chain `0001→…→0005` linear; `/auth`, `/profile`, `/health` unchanged; `import-linter` contracts kept.
-- **Baseline:** _[N backend tests, M% coverage]_
-- **Deviations:** _[pypdf vs PyMuPDF (§2.2); Claude adapter pulled forward from Phase 7 for `complete()` only; …]_
-- **Not verified here:** real extraction quality on varied résumé layouts (needs the opt-in smoke + Phase 2b's review UI in front of a human); date-string normalisation (Phase 3); résumé chunk embeddings (Phase 6).
+_Executed 2026-08-31 via subagent-driven-development (11 tasks, fresh implementer +
+two-verdict review per task). Ledger: `.superpowers/sdd/2026-08-31-phase-2a-resume-ingestion/progress.md`._
+
+- **What changed:**
+  - **Config (`app/core/config.py`):** `file_store` / `file_store_local_dir` /
+    `resume_max_bytes` (10 MiB) / `resume_max_pages` (15) / `llm_model_extraction` /
+    `anthropic_model_fallback` / `upload_limit_per_hour` (20). Rate-limit `_bucket`
+    gained an `"upload"` tier (POST `/resumes`|`/jobs`, 3600 s window).
+  - **File storage (`app/infra/storage/`)** — new `app.infra` layer: `FileStore`
+    Protocol + `LocalFileStore` (path-traversal-guarded, `asyncio.to_thread` IO) +
+    `get_file_store` factory. `import-linter` layers now
+    `api > worker > domain > infra > core > models`.
+  - **`resumes` table** (`app/models/resume.py`, migration `0005_resumes`) — upload →
+    parse → extract lifecycle, `status` CHECK, partial-unique
+    `uq_resumes_user_primary`, `confirmed_at` for merge idempotency.
+  - **Parsing (`app/domain/resume/parser.py`)** — `ResumeParser` Protocol,
+    `PypdfResumeParser` (digital text), `OcrResumeParser` stub,
+    `MIN_DIGITAL_TEXT_CHARS = 120`, shared `SCANNED_PDF_MESSAGE`.
+  - **Extraction (`app/domain/resume/extractor.py`)** — `ResumeExtraction` +
+    `Extracted{Experience,Education,Project,Certification}` Pydantic models,
+    `EXTRACTION_SYSTEM_PROMPT`, `ResumeExtractor` (schema-bound, `text[:20000]`).
+  - **Claude adapter (`app/domain/llm/adapters/anthropic.py`)** — `AnthropicAdapter`
+    implementing `LLMProvider.complete()` via forced-tool structured output;
+    `get_llm_provider` routes `"anthropic"`. (`complete()` only — streaming is Phase 7.)
+  - **SSE plumbing (`app/core/events.py`)** — `resume_channel`, `publish_status`,
+    `status_stream` (Redis pub/sub relay, 15 s pings, terminal-close, resilient
+    cleanup), `sse_event`.
+  - **`ResumeService` (`app/domain/resume/service.py`)** — `create` (filetype sniff +
+    size guard + store + row + `enqueue` + audit), `get`/`list_`/`update`/`delete`/
+    `reprocess`, and human-gated `confirm_profile` (merges extraction into
+    `CareerProfile`: truthy-only scalar overwrite with length clamps, replace
+    `source="resume_extraction"` sub-entities, date strings deferred to Phase 3,
+    `_recompute`, `confirmed_at`, audit). `enqueue` moved `app.worker.main` →
+    `app.core.queue` so the domain layer stays worker-free.
+  - **ARQ pipeline (`app/worker/tasks/resume.py`)** — `parse_resume` → `extract_resume`,
+    each publishing status; page-count / scanned-PDF guards; failure path sets
+    `status="failed"`, records to dead-letter (Redis-outage-safe), re-raises for retry.
+  - **API (`app/api/v1/resumes.py`, `schemas/resume.py`)** — 9 operations:
+    `POST /resumes` (202), `GET /resumes`, `GET|PATCH|DELETE /resumes/{id}`,
+    `GET /resumes/{id}/events` (SSE), `GET /resumes/{id}/extraction`,
+    `POST /resumes/{id}/reprocess` (202), `POST /resumes/{id}/confirm-profile` (204).
+- **Why:** résumé → structured extraction is the on-ramp — every later phase (matching,
+  tailoring, the agent) reads the profile this builds; it's also the project's first
+  real LLM call.
+- **Files changed / new deps:** ~22 backend files (11 new modules, 4 new migrations/models,
+  4 new test files, config/router/worker/conftest edits). New deps: `pypdf`, `filetype`,
+  `anthropic`, `sse-starlette` (added via `uv add`, `uv.lock` regenerated).
+- **How to test:** `cd backend && uv run pytest tests/domain/resume tests/api/test_resumes.py tests/worker/test_resume_tasks.py -q` (DB+Redis-backed — CI).
+- **Regression check:** local `ruff` clean, `mypy app` clean (65 files), `import-linter`
+  2 contracts kept (incl. the new `app.infra` layer), whole suite collects 158 with no
+  errors, offline subset 21 passed; `test_config.py` incl. `test_resume_and_filestore_defaults`
+  green. Migration chain `0001 → … → 0005` linear. `/auth`, `/profile`, `/health` untouched.
+  Full DB+Redis suite (Phase 0/1a/1b/2a) runs green in CI.
+- **Baseline:** 158 backend tests collected (was 130 pre-phase). 15 new résumé-domain
+  tests run offline; the 13 DB/Redis-backed ones (models, service, worker, API) run in CI.
+- **Deviations:**
+  - `pypdf` instead of spec §2.2's PyMuPDF — pure-Python, BSD-licensed (PyMuPDF is
+    AGPL), no compiled wheel. `ResumeParser` interface preserves the intent; a
+    `PymupdfResumeParser` can drop in later.
+  - Claude adapter pulled forward from Phase 7 — `complete()` only (no streaming).
+  - `enqueue` relocated to `app.core.queue` (plan had `ResumeService` importing it from
+    `app.worker`, which breaks the `domain-isolation` import contract).
+  - Test files renamed for the rootless layout: `test_resume_service.py` (not
+    `test_service.py` — clashes with `tests/domain/auth/test_service.py`).
+  - Task-10 conftest: an autouse `_tmp_file_store` fixture (monkeypatch `get_file_store`
+    → `tmp_path`) instead of the planned `FILE_STORE_LOCAL_DIR` env `setdefault`, which
+    would pollute `Settings()` process-wide and regress `test_config.py`.
+  - Tasks 6 & 9's implementer subagents hit an infra stream-watchdog stall *after*
+    writing all files and passing every gate; the controller re-verified gates
+    independently and committed. Both passed full task review afterward.
+- **Not verified here:** real extraction quality on varied résumé layouts (needs the
+  opt-in real-LLM smoke + Phase 2b's review UI in front of a human); date-string
+  normalisation (Phase 3); résumé chunk embeddings (Phase 6); live SSE round-trip
+  under a real browser (Phase 2b).
 
 ---
 
