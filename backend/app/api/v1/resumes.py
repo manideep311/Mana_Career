@@ -80,7 +80,8 @@ async def resume_events(
                     }
                 )
                 if current in {"extracted", "failed"}:
-                    return  # status_stream's finally cleans up the subscription
+                    yield sse_event({"event": "done", "status": current, "totals": {}})
+                    return
                 continue
             yield sse_event(payload)
 

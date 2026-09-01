@@ -42,18 +42,47 @@ class _FakeRedisForStream:
         return self._pubsub
 
 
-async def test_status_stream_opens_relays_and_closes_on_terminal():
+async def test_status_stream_emits_done_after_terminal_status():
     ps = _FakePubSub([
         {"data": json.dumps({"event": "status", "status": "parsing"})},
         {"data": json.dumps({"event": "status", "status": "extracted"})},
     ])
     out = [
-        ev
-        async for ev in status_stream(
+        ev async for ev in status_stream(
             _FakeRedisForStream(ps), "ch", terminal={"extracted", "failed"}
         )
     ]
     assert out[0] == {"event": "open"}
-    assert ps.subscribed_to == "ch"  # subscribe happened before the first yield
-    assert out[-1]["status"] == "extracted"
+    # Subscribe happens before the first yield — this is what makes `open` and
+    # race-free reconnect work.
+    assert ps.subscribed_to == "ch"
+    assert out[-2]["status"] == "extracted"
+    assert out[-1] == {"event": "done", "status": "extracted", "totals": {}}
     assert ps.unsubscribed and ps.closed
+
+
+async def test_status_stream_emits_error_on_malformed_payload():
+    ps = _FakePubSub([{"data": "not-json"}])
+    out = [
+        ev async for ev in status_stream(
+            _FakeRedisForStream(ps), "ch", terminal={"extracted", "failed"}
+        )
+    ]
+    assert out[0] == {"event": "open"}
+    assert out[-1]["event"] == "error"
+    assert out[-1]["code"] == "stream.bad_payload"
+    assert ps.unsubscribed and ps.closed
+
+
+async def test_status_stream_skips_keepalive_timeouts_without_a_ping_frame():
+    ps = _FakePubSub([
+        None,  # a get_message() timeout
+        {"data": json.dumps({"event": "status", "status": "extracted"})},
+    ])
+    out = [
+        ev async for ev in status_stream(
+            _FakeRedisForStream(ps), "ch", terminal={"extracted", "failed"}
+        )
+    ]
+    assert {"event": "ping"} not in out
+    assert out[-1] == {"event": "done", "status": "extracted", "totals": {}}

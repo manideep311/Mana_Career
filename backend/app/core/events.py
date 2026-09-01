@@ -47,20 +47,33 @@ async def status_stream(
         await pubsub.subscribe(channel)
         yield {"event": "open"}  # only fires once the subscription is live
         while True:
-            msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
+            msg = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=15.0
+            )
             if msg is None:
-                yield {"event": "ping"}
+                # EventSourceResponse sends its own keepalive comment; nothing
+                # to emit on a plain read timeout.
                 continue
-            payload: dict[str, Any] = json.loads(msg["data"])
+            try:
+                payload: dict[str, Any] = json.loads(msg["data"])
+            except (json.JSONDecodeError, TypeError):
+                yield {
+                    "event": "error",
+                    "code": "stream.bad_payload",
+                    "message": "Received a malformed status update.",
+                }
+                return
             yield payload
             if payload.get("status") in terminal:
+                yield {
+                    "event": "done",
+                    "status": payload.get("status"),
+                    "totals": {},
+                }
                 return
     finally:
-        # A mid-stream connection drop can make unsubscribe() raise; aclose() is
-        # the call that releases the pooled connection, so it must still run.
         with contextlib.suppress(Exception):
             await pubsub.unsubscribe(channel)
-        # redis-py's async PubSub.aclose lacks type coverage under strict mypy.
         await pubsub.aclose()  # type: ignore[no-untyped-call]
 
 
