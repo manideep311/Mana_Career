@@ -51,5 +51,8 @@ async def audit(
     except asyncio.CancelledError:
         raise
     except Exception:
+        # Do NOT rollback here: on the shared request session that would discard
+        # the caller's uncommitted work while the route still returns success.
+        # Propagate so it becomes an honest 500 instead.
         log.exception("audit_write_failed", action=action)
-        await session.rollback()
+        raise

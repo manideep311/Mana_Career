@@ -44,8 +44,17 @@ async def check_rate_limit(
     )
 
 
-def _bucket(path: str) -> str:
-    return "auth" if path.startswith(get_settings().api_base_path + "/auth") else "read"
+def _bucket(path: str, method: str) -> str:
+    base = get_settings().api_base_path
+    if method == "POST" and path in (f"{base}/resumes", f"{base}/jobs"):
+        return "upload"
+    if method == "POST" and (
+        path.endswith("/reprocess") or path.endswith("/confirm-profile")
+    ):
+        return "llm"
+    if path.startswith(f"{base}/auth"):
+        return "auth"
+    return "read"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -56,15 +65,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         settings = get_settings()
         client_ip = request.client.host if request.client else "unknown"
-        bucket = _bucket(path)
-        limit = (
-            AUTH_LIMIT_PER_MINUTE
-            if bucket == "auth"
-            else settings.rate_limit_default_per_minute
-        )
+        bucket = _bucket(path, request.method)
+
+        if bucket == "auth":
+            limit = AUTH_LIMIT_PER_MINUTE
+            window = 60
+        elif bucket == "upload":
+            limit = settings.upload_limit_per_hour
+            window = 3600
+        elif bucket == "llm":
+            limit = settings.llm_limit_per_hour
+            window = 3600
+        else:
+            limit = settings.rate_limit_default_per_minute
+            window = 60
+
         try:
             state = await check_rate_limit(
-                redis_from_settings(settings), key=f"rl:{client_ip}:{bucket}", limit=limit
+                redis_from_settings(settings),
+                key=f"rl:{client_ip}:{bucket}",
+                limit=limit,
+                window_seconds=window,
             )
         except (RedisError, OSError):
             # Fail open: a Redis outage must not take the API down.

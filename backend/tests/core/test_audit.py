@@ -1,6 +1,8 @@
 import uuid
 
+import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.core.audit import audit
 from app.models.audit import AuditLog
@@ -22,8 +24,10 @@ async def test_audit_writes_a_row(db_session):
     assert row.result == "success"
 
 
-async def test_audit_swallows_bad_input_without_raising(db_session):
-    # invalid actor_type violates the CHECK constraint; must not bubble up
-    await audit(db_session, actor_type="not-a-valid-actor", action="x")
-    # session still usable
-    assert (await db_session.execute(select(AuditLog.id))).first() is None or True
+async def test_audit_propagates_write_failure(db_session):
+    # invalid actor_type violates the CHECK constraint. A failed audit write is a
+    # real error: audit() must propagate it (not silently roll back the caller's
+    # transaction and return as if nothing happened).
+    with pytest.raises((IntegrityError, DBAPIError)):
+        await audit(db_session, actor_type="not-a-valid-actor", action="x")
+    await db_session.rollback()

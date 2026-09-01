@@ -35,3 +35,23 @@ async def test_first_hit_sets_expiry():
     await check_rate_limit(r, key="k", limit=5, window_seconds=60)
     await check_rate_limit(r, key="k", limit=5, window_seconds=60)
     assert calls == [("k", 60)]
+
+
+def test_bucket_classifies_uploads():
+    from app.core.rate_limit import _bucket
+
+    assert _bucket("/api/v1/resumes", "POST") == "upload"
+    assert _bucket("/api/v1/jobs", "POST") == "upload"
+    assert _bucket("/api/v1/resumes", "GET") == "read"
+    assert _bucket("/api/v1/auth/login", "POST") == "auth"
+
+
+def test_bucket_classifies_llm_tier():
+    from app.core.rate_limit import _bucket
+
+    uid = "11111111-1111-1111-1111-111111111111"
+    assert _bucket(f"/api/v1/resumes/{uid}/reprocess", "POST") == "llm"
+    assert _bucket(f"/api/v1/resumes/{uid}/confirm-profile", "POST") == "llm"
+    # A GET to the same paths is not an LLM-tier call.
+    assert _bucket(f"/api/v1/resumes/{uid}/reprocess", "GET") == "read"
+    assert _bucket(f"/api/v1/resumes/{uid}/confirm-profile", "GET") == "read"

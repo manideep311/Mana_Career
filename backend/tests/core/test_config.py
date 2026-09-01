@@ -61,3 +61,15 @@ def test_refresh_cookie_secure_env_override(monkeypatch: pytest.MonkeyPatch):
     for k, v in _env(REFRESH_COOKIE_SECURE="false").items():
         monkeypatch.setenv(k, v)
     assert Settings().refresh_cookie_secure is False
+
+
+def test_resume_and_filestore_defaults(monkeypatch: pytest.MonkeyPatch):
+    for k, v in _env().items():
+        monkeypatch.setenv(k, v)
+    s = Settings()
+    assert s.file_store == "local"
+    assert s.file_store_local_dir == "./var/files"
+    assert s.resume_max_bytes == 10_485_760
+    assert s.resume_max_pages == 15
+    assert s.llm_model_extraction == "claude-haiku-4-5-20251001"
+    assert s.upload_limit_per_hour == 20

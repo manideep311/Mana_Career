@@ -25,6 +25,7 @@ out/
 # Data / uploads / local storage
 /data/
 /storage/
+backend/var/
 *.sqlite3
 
 # OS / editor

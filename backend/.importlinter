@@ -10,6 +10,7 @@ layers =
     (app.api)
     (app.worker)
     (app.domain)
+    app.infra
     app.core
     app.models
 

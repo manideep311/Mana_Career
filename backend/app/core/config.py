@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     refresh_cookie_secure: bool = True
 
     rate_limit_default_per_minute: int = 240
+    upload_limit_per_hour: int = 20
+    llm_limit_per_hour: int = 60
 
     llm_provider: Literal["fake", "anthropic", "openai", "gemini"] = "fake"
     anthropic_api_key: SecretStr | None = None
@@ -38,6 +40,13 @@ class Settings(BaseSettings):
     embeddings_provider: Literal["fake", "voyage", "openai", "local"] = "fake"
     embed_model: str = "fake-embed-1"
     embed_dim: int = 1024
+
+    file_store: Literal["local", "s3"] = "local"
+    file_store_local_dir: str = "./var/files"
+    resume_max_bytes: int = 10_485_760
+    resume_max_pages: int = 15
+    llm_model_extraction: str = "claude-haiku-4-5-20251001"
+    anthropic_model_fallback: str = "claude-sonnet-5"
 
     @field_validator("cors_origins", mode="before")
     @classmethod
