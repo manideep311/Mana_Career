@@ -12,8 +12,10 @@ interface ProblemBody {
  * Maps a thrown API error onto react-hook-form and reports whether it did.
  *
  * - `ProblemError` with `code === "validation_error"` and a `problem.errors`
- *   array: calls `setError` for each entry, keyed by the tail segment of its
- *   `loc` path (`["body", "email"] -> "email"`). Returns `true`.
+ *   array: calls `setError` for each entry, keyed by the dotted `loc` path
+ *   below `body` (`["body", "email"] -> "email"`;
+ *   `["body", "experiences", 0, "company"] -> "experiences.0.company"`).
+ *   Returns `true`.
  * - Any other `ProblemError`: sets a `root` error from `problem.detail`, or a
  *   generic fallback when there is none. Returns `true`.
  * - Anything else (a plain `Error`, a network failure, ...): touches nothing
@@ -33,7 +35,12 @@ export function applyProblemToForm(
   if (err.code === "validation_error" && Array.isArray(problem.errors)) {
     for (const item of problem.errors) {
       const loc = Array.isArray(item.loc) ? item.loc : [];
-      const field = String(loc[loc.length - 1] ?? "");
+      // Key on the full dotted path below `body` (e.g.
+      // `["body","experiences",0,"company"] -> "experiences.0.company"`) so a
+      // nested/row validation error reaches the matching rhf field, not just a
+      // bare tail segment. Falls through to "" (skipped) for an empty `loc`.
+      const field =
+        loc[0] === "body" ? loc.slice(1).join(".") : loc.join(".");
       if (field) {
         setError(field, { message: item.msg ?? "This value is not valid." });
       }

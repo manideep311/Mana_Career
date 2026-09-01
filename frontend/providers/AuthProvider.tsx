@@ -14,6 +14,7 @@ import {
 import { makeApi } from "@/lib/api/endpoints";
 import { apiFetch, ProblemError, type Fetcher } from "@/lib/api/fetcher";
 import type { AccessResponse, AuthResponse, UserOut } from "@/lib/api/types";
+import { API_BASE_URL } from "@/lib/env";
 
 export type AuthStatus = "loading" | "authed" | "anon";
 
@@ -23,6 +24,7 @@ export interface AuthContextValue {
   status: AuthStatus;
   user: UserOut | null;
   api: Api;
+  authedStream: (path: string, init?: RequestInit) => Promise<Response>;
   login: (body: { email: string; password: string }) => Promise<void>;
   register: (body: {
     email: string;
@@ -56,6 +58,10 @@ export function useAuth(): AuthContextValue {
  *
  * `authedFetch` injects `Authorization: Bearer <token>` and, on a 401, does a
  * single silent `bootstrap()` + retry before giving up and going `anon`.
+ *
+ * `authedStream` is the same bearer + one-refresh-retry dance but returns the
+ * raw `Response` (body never read) so callers can stream it — e.g. an SSE hook
+ * that cannot set an `Authorization` header via `EventSource`.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const tokenRef = useRef<string | null>(null);
@@ -105,6 +111,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [bootstrap],
   ) as Fetcher;
+
+  const authedStream = useCallback(
+    async (path: string, init?: RequestInit): Promise<Response> => {
+      const go = () =>
+        fetch(`${API_BASE_URL}${path}`, {
+          ...init,
+          credentials: "include",
+          headers: {
+            ...(init?.headers ?? {}),
+            Authorization: `Bearer ${tokenRef.current}`,
+          },
+        });
+      const res = await go();
+      if (res.status !== 401) return res;
+      try {
+        await bootstrap();
+      } catch (err) {
+        setStatus("anon");
+        throw err;
+      }
+      const retry = await go();
+      if (retry.status === 401) setStatus("anon");
+      return retry;
+    },
+    [bootstrap],
+  );
 
   const api = useMemo(() => makeApi(authedFetch), [authedFetch]);
   const plainApi = useMemo(() => makeApi(apiFetch), []);
@@ -157,8 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [bootstrap]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, api, login, register, logout, changePassword }),
-    [status, user, api, login, register, logout, changePassword],
+    () => ({
+      status,
+      user,
+      api,
+      authedStream,
+      login,
+      register,
+      logout,
+      changePassword,
+    }),
+    [status, user, api, authedStream, login, register, logout, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

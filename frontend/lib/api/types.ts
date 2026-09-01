@@ -67,3 +67,82 @@ export interface ProfileFull extends CareerProfile {
 }
 
 export type Section = "experiences" | "education" | "projects" | "certifications";
+
+export type ResumeStatus =
+  | "uploaded"
+  | "parsing"
+  | "parsed"
+  | "extracting"
+  | "extracted"
+  | "failed";
+
+export interface ResumeOut {
+  id: string;
+  title: string | null;
+  original_filename: string | null;
+  content_type: string;
+  size_bytes: number;
+  page_count: number | null;
+  status: ResumeStatus;
+  parse_error: string | null;
+  is_primary: boolean;
+  confirmed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExtractedExperience {
+  company: string;
+  title: string;
+  employment_type?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_current?: boolean;
+  location?: string | null;
+  description?: string | null;
+  highlights?: string[];
+  tech?: string[];
+}
+
+export interface ExtractedEducation {
+  institution: string;
+  degree?: string | null;
+  field?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  grade?: string | null;
+}
+
+export interface ExtractedProject {
+  name: string;
+  description?: string | null;
+  url?: string | null;
+  highlights?: string[];
+  tech?: string[];
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface ExtractedCertification {
+  name: string;
+  issuer?: string | null;
+  issued_date?: string | null;
+  expires_date?: string | null;
+  credential_id?: string | null;
+  url?: string | null;
+}
+
+export interface ResumeExtraction {
+  full_name?: string | null;
+  email?: string | null;
+  location?: string | null;
+  github_url?: string | null;
+  linkedin_url?: string | null;
+  portfolio_url?: string | null;
+  summary?: string | null;
+  skills?: string[];
+  experiences?: ExtractedExperience[];
+  education?: ExtractedEducation[];
+  projects?: ExtractedProject[];
+  certifications?: ExtractedCertification[];
+}

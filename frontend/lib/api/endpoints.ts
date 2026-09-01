@@ -2,8 +2,14 @@ import {
   AccessResponse,
   AuthResponse,
   CareerProfile,
+  ExtractedExperience,
+  ExtractedEducation,
+  ExtractedProject,
+  ExtractedCertification,
   ItemOut,
   ProfileFull,
+  ResumeExtraction,
+  ResumeOut,
   Section,
   Strength,
   UserOut,
@@ -83,6 +89,41 @@ export function makeApi(f: Fetcher) {
             json("POST", { ids }),
           );
         },
+      },
+    },
+    resumes: {
+      async list() {
+        return f<ResumeOut[]>("/api/v1/resumes");
+      },
+      async get(id: string) {
+        return f<ResumeOut>(`/api/v1/resumes/${id}`);
+      },
+      async upload(file: File) {
+        const form = new FormData();
+        form.append("file", file);
+        return f<ResumeOut>("/api/v1/resumes", { method: "POST", body: form });
+      },
+      async extraction(id: string) {
+        return f<ResumeExtraction>(`/api/v1/resumes/${id}/extraction`);
+      },
+      async patch(id: string, body: { title?: string; is_primary?: boolean }) {
+        return f<ResumeOut>(`/api/v1/resumes/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+      async reprocess(id: string) {
+        return f<ResumeOut>(`/api/v1/resumes/${id}/reprocess`, { method: "POST" });
+      },
+      async remove(id: string) {
+        return f<void>(`/api/v1/resumes/${id}`, { method: "DELETE" });
+      },
+      async confirmProfile(id: string, extraction: ResumeExtraction) {
+        return f<void>(
+          `/api/v1/resumes/${id}/confirm-profile`,
+          json("POST", { extraction }),
+        );
       },
     },
   };

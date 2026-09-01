@@ -29,7 +29,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { makeQueryClient } from "@/lib/query";
 import { AuthContext, type AuthContextValue } from "@/providers/AuthProvider";
 
-export { AuthContext };
+// Re-export straight from the source module: re-exporting the imported local
+// binding (`export { AuthContext }`) trips a Vite SSR live-binding quirk where
+// consumers read it as `undefined`.
+export { AuthContext } from "@/providers/AuthProvider";
 export type { AuthContextValue };
 
 /* -------------------------------------------------------------------------- */
@@ -147,8 +150,9 @@ export interface RenderWithProvidersOptions {
 
 /**
  * Builds a complete `AuthContextValue` from sensible test defaults deep-merged
- * with `opts.authValue`. Defaults: `status: "authed"`, `user: null`, the four
- * actions are `vi.fn()`s resolving `undefined`, and `api` is `opts.api ?? {}`.
+ * with `opts.authValue`. Defaults: `status: "authed"`, `user: null`, the five
+ * actions (`login` / `register` / `logout` / `changePassword` / `authedStream`)
+ * are `vi.fn()`s resolving `undefined`, and `api` is `opts.api ?? {}`.
  */
 export function makeAuthValue(
   opts: Pick<RenderWithProvidersOptions, "authValue" | "api"> = {},
@@ -157,6 +161,7 @@ export function makeAuthValue(
     status: "authed",
     user: null,
     api: (opts.api ?? {}) as AuthContextValue["api"],
+    authedStream: vi.fn(async () => new Response(null, { status: 500 })),
     login: vi.fn(async () => {}),
     register: vi.fn(async () => {}),
     logout: vi.fn(async () => {}),
