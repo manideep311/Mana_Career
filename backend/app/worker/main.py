@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from arq import create_pool
 from arq.connections import RedisSettings
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
-from app.worker.tasks import ping
+from app.core.queue import enqueue
+from app.worker.tasks import extract_resume, parse_resume, ping
+from app.worker.tasks.resume import MAX_TRIES
+
+__all__ = ["WorkerSettings", "enqueue"]
 
 _settings = get_settings()
 log = get_logger("worker")
@@ -27,22 +30,14 @@ async def _on_shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [ping]
+    functions: ClassVar[list[Any]] = [ping, parse_resume, extract_resume]
     redis_settings = _redis_settings()
     on_startup = _on_startup
     on_shutdown = _on_shutdown
     max_jobs = 10
     job_timeout = 300
-    max_tries = 3
+    max_tries = MAX_TRIES
     retry_jobs = True
-
-
-async def enqueue(task: str, *args: Any, **kwargs: Any) -> str:
-    pool = await create_pool(_redis_settings())
-    try:
-        job = await pool.enqueue_job(task, *args, **kwargs)
-        if job is None:
-            raise RuntimeError(f"could not enqueue {task!r} (duplicate job id?)")
-        return job.job_id
-    finally:
-        await pool.aclose()
+    # We never read job results; retaining them would make the _job_id dedup in
+    # core.queue reject a legitimate later reprocess of the same résumé.
+    keep_result = 0

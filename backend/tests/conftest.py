@@ -105,6 +105,9 @@ def fake_redis() -> object:
         async def ttl(self, key: str) -> int:
             return 42
 
+        async def publish(self, channel: str, message: str) -> int:
+            return 0
+
         async def ping(self) -> bool:
             return True
 
@@ -112,3 +115,36 @@ def fake_redis() -> object:
             return None
 
     return _FakeRedis()
+
+
+@pytest.fixture(autouse=True)
+def _no_enqueue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stop résumé uploads from reaching the real ARQ Redis pool.
+
+    Tests that assert on ``enqueue`` re-patch it in their own body (this fixture
+    runs first, so their patch wins).
+    """
+
+    async def _noop(*args: object, **kwargs: object) -> str:
+        return "test-job"
+
+    monkeypatch.setattr("app.domain.resume.service.enqueue", _noop, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _tmp_file_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep résumé uploads out of the repo working tree.
+
+    ``ResumeService`` calls ``get_file_store(settings)`` when no ``file_store`` is
+    passed; the default ``LocalFileStore`` root is ``./var/files`` (inside the
+    repo). Redirect it to a pytest ``tmp_path`` dir. Tests that pass their own
+    ``file_store=`` (Task 8's ``_svc``) never hit this path.
+    """
+    from app.infra.storage.local import LocalFileStore
+
+    store = LocalFileStore(str(tmp_path / "files"))
+    monkeypatch.setattr(
+        "app.domain.resume.service.get_file_store",
+        lambda _settings: store,
+        raising=False,
+    )
