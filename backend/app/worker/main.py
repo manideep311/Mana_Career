@@ -7,7 +7,7 @@ from arq.connections import RedisSettings
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.queue import enqueue
-from app.worker.tasks import extract_resume, parse_resume, ping
+from app.worker.tasks import build_profile, extract_resume, parse_resume, ping
 from app.worker.tasks.resume import MAX_TRIES
 
 __all__ = ["WorkerSettings", "enqueue"]
@@ -30,7 +30,7 @@ async def _on_shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions: ClassVar[list[Any]] = [ping, parse_resume, extract_resume]
+    functions: ClassVar[list[Any]] = [ping, parse_resume, extract_resume, build_profile]
     redis_settings = _redis_settings()
     on_startup = _on_startup
     on_shutdown = _on_shutdown

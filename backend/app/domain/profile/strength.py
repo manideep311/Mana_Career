@@ -4,18 +4,24 @@ from dataclasses import dataclass
 
 from app.models.profile import CareerProfile
 
-_WEIGHTS: list[tuple[str, int, str]] = [
-    ("location", 8, "Add your location"),
-    ("links", 10, "Add a GitHub, LinkedIn or portfolio link"),
-    ("goals", 10, "Add your career goals"),
-    ("preferred_roles", 8, "Add the roles you're targeting"),
-    ("seniority", 6, "Set your seniority level"),
-    ("years_experience", 6, "Add your years of experience"),
-    ("salary", 6, "Add your salary expectations"),
-    ("experience", 20, "Add your work experience"),
-    ("education", 12, "Add your education"),
-    ("projects", 10, "Add a project"),
-    ("certifications", 4, "Add a certification"),
+_WEIGHTS: list[tuple[str, int, str, str]] = [
+    ("location", 8, "Location", "Add your location"),
+    ("links", 6, "Profile links", "Add a GitHub, LinkedIn or portfolio link"),
+    ("goals", 10, "Career goals", "Add your career goals"),
+    ("preferred_roles", 8, "Target roles", "Add the roles you're targeting"),
+    ("seniority", 6, "Seniority", "Set your seniority level"),
+    ("years_experience", 6, "Years of experience", "Add your years of experience"),
+    ("salary", 6, "Salary expectations", "Add your salary expectations"),
+    ("experience", 16, "Work experience", "Add your work experience"),
+    ("education", 12, "Education", "Add your education"),
+    ("projects", 10, "Projects", "Add a project"),
+    ("certifications", 4, "Certifications", "Add a certification"),
+    (
+        "skills_mapped",
+        8,
+        "Skills mapped",
+        "Upload a résumé so Mana can map your skills",
+    ),
 ]
 
 
@@ -28,10 +34,21 @@ class ProfileCounts:
 
 
 @dataclass(frozen=True)
+class StrengthDimension:
+    key: str
+    label: str
+    earned: int
+    max: int
+    hint: str
+    met: bool
+
+
+@dataclass(frozen=True)
 class StrengthResult:
     score: int
     completeness: dict[str, bool]
     missing: list[str]
+    dimensions: list[StrengthDimension]
 
 
 def _truthy(value: object) -> bool:
@@ -44,7 +61,9 @@ def _truthy(value: object) -> bool:
     return True
 
 
-def compute_strength(profile: CareerProfile, counts: ProfileCounts) -> StrengthResult:
+def compute_strength(
+    profile: CareerProfile, counts: ProfileCounts, *, skill_count: int = 0
+) -> StrengthResult:
     checks: dict[str, bool] = {
         "location": _truthy(profile.location),
         "links": any(
@@ -61,7 +80,21 @@ def compute_strength(profile: CareerProfile, counts: ProfileCounts) -> StrengthR
         "education": counts.education >= 1,
         "projects": counts.projects >= 1,
         "certifications": counts.certifications >= 1,
+        "skills_mapped": skill_count >= 5,
     }
-    score = sum(w for key, w, _ in _WEIGHTS if checks[key])
-    missing = [label for key, _, label in _WEIGHTS if not checks[key]]
-    return StrengthResult(score=score, completeness=checks, missing=missing)
+    score = sum(w for key, w, _label, _hint in _WEIGHTS if checks[key])
+    missing = [hint for key, _w, _label, hint in _WEIGHTS if not checks[key]]
+    dimensions = [
+        StrengthDimension(
+            key=key,
+            label=label,
+            earned=(w if checks[key] else 0),
+            max=w,
+            hint=hint,
+            met=checks[key],
+        )
+        for key, w, label, hint in _WEIGHTS
+    ]
+    return StrengthResult(
+        score=score, completeness=checks, missing=missing, dimensions=dimensions
+    )

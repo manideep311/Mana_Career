@@ -1,4 +1,5 @@
 from app.worker.tasks.ping import ping
+from app.worker.tasks.profile import build_profile
 from app.worker.tasks.resume import extract_resume, parse_resume
 
-__all__ = ["extract_resume", "parse_resume", "ping"]
+__all__ = ["build_profile", "extract_resume", "parse_resume", "ping"]

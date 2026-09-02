@@ -17,6 +17,7 @@ from app.models.profile import (
     ProfileExperience,
     ProfileProject,
 )
+from app.models.skill import ProfileSkill, Skill
 
 SUBENTITY_MODELS: dict[str, type] = {
     "experiences": ProfileExperience,
@@ -80,7 +81,8 @@ class ProfileService:
             projects=await self._count(profile.id, ProfileProject),
             certifications=await self._count(profile.id, ProfileCertification),
         )
-        result = compute_strength(profile, counts)
+        skill_count = await self._count(profile.id, ProfileSkill)
+        result = compute_strength(profile, counts, skill_count=skill_count)
         profile.profile_strength = result.score
         profile.completeness = result.completeness
         await self.session.flush()
@@ -106,6 +108,17 @@ class ProfileService:
             name: await self.list_section(user_id, name) for name in SUBENTITY_MODELS
         }
         return profile, sections
+
+    async def list_skills(
+        self, user_id: uuid.UUID
+    ) -> list[tuple[ProfileSkill, Skill]]:
+        stmt = (
+            select(ProfileSkill, Skill)
+            .join(Skill, ProfileSkill.skill_id == Skill.id)
+            .where(ProfileSkill.user_id == user_id)
+            .order_by(Skill.category, Skill.label)
+        )
+        return list((await self.session.execute(stmt)).tuples().all())
 
     async def update_scalars(
         self, user_id: uuid.UUID, patch: dict[str, Any]

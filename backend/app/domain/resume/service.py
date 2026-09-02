@@ -279,3 +279,10 @@ class ResumeService:
                 },
             },
         )
+
+        # Defer so this request's DELETE + re-INSERT of the résumé-derived
+        # sub-entities is committed before the builder (its own session) reads
+        # them; a stable _job_id makes a duplicate enqueue a no-op.
+        await enqueue(
+            "build_profile", str(user_id), _defer_by=2.0, _job_id=f"build_profile:{user_id}"
+        )

@@ -6,6 +6,7 @@ from app.core.errors import NotFoundError, ValidationAppError
 from app.domain.auth.service import AuthService
 from app.domain.profile.service import ProfileService
 from app.models.profile import ProfileExperience
+from app.models.skill import ProfileSkill, Skill
 
 
 async def _user_id(db_session, email="svc@example.com") -> uuid.UUID:
@@ -47,7 +48,7 @@ async def test_add_update_delete_item_updates_counts(db_session):
     e = await svc.add_item(uid, "experiences", {"company": "Acme", "title": "Eng"})
     assert isinstance(e, ProfileExperience) and e.order_index == 0
     p = await svc.get_or_create(uid)
-    assert p.profile_strength == 20
+    assert p.profile_strength == 16  # work experience weight
     await svc.update_item(uid, "experiences", e.id, {"title": "Senior Eng"})
     await svc.delete_item(uid, "experiences", e.id)
     p = await svc.get_or_create(uid)
@@ -81,3 +82,33 @@ async def test_reorder_rejects_mismatched_id_set(db_session):
     a = await svc.add_item(uid, "education", {"institution": "A"})
     with pytest.raises(ValidationAppError):
         await svc.reorder(uid, "education", [a.id, uuid.uuid4()])
+
+
+async def _add_skills(db_session, uid, profile_id, n) -> None:
+    skills = []
+    for _ in range(n):
+        slug = f"mapped-skill-{uuid.uuid4().hex}"
+        skills.append(Skill(slug=slug, label=slug, category="language"))
+    db_session.add_all(skills)
+    await db_session.flush()
+    for s in skills:
+        db_session.add(
+            ProfileSkill(user_id=uid, profile_id=profile_id, skill_id=s.id)
+        )
+    await db_session.flush()
+
+
+async def test_recompute_scores_skills_mapped_dimension(db_session):
+    svc = ProfileService(db_session)
+    uid = await _user_id(db_session, "mapped@example.com")
+    profile = await svc.get_or_create(uid)
+
+    await _add_skills(db_session, uid, profile.id, 4)
+    await svc._recompute(profile)
+    assert profile.completeness["skills_mapped"] is False
+    strength_with_four = profile.profile_strength
+
+    await _add_skills(db_session, uid, profile.id, 1)
+    await svc._recompute(profile)
+    assert profile.completeness["skills_mapped"] is True
+    assert profile.profile_strength == strength_with_four + 8
