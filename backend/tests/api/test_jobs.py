@@ -1,6 +1,12 @@
+import decimal
 import uuid
 
+from sqlalchemy import select
+
+from app.domain.matching.weights import SCORER_VERSION
 from app.models.job import Job
+from app.models.match import JobMatch
+from app.models.user import User
 
 
 async def _auth(client, email="jobs-api@x.com"):
@@ -59,6 +65,47 @@ async def test_get_job_detail_has_raw_text(client, db_session):
     assert body["title"] == "Detail Job"
     assert body["required_skills"] == [] and body["preferred_skills"] == []
     assert body["responsibilities"] == []
+
+
+async def test_get_jobs_surfaces_match_score_has_match_filter_and_sort(client, db_session):
+    email = "jobs-api-match@x.com"
+    h = await _auth(client, email)
+    user = (
+        await db_session.execute(select(User).where(User.email == email))
+    ).scalar_one()
+    matched = Job(user_id=None, is_seed=True, source="seed", status="ready",
+                  raw_text="x" * 60, title="Matched Job", company="M")
+    unmatched = Job(user_id=None, is_seed=True, source="seed", status="ready",
+                    raw_text="x" * 60, title="Unmatched Job", company="U")
+    db_session.add_all([matched, unmatched])
+    await db_session.flush()
+    db_session.add(JobMatch(
+        user_id=user.id, job_id=matched.id, scorer_version=SCORER_VERSION,
+        resume_version_id=None, status="ready",
+        score=decimal.Decimal("88"), band="good",
+    ))
+    await db_session.commit()
+
+    # match score/band/status land on the card
+    r = await client.get("/api/v1/jobs", headers=h)
+    cards = {j["title"]: j for j in r.json()["items"]}
+    assert cards["Matched Job"]["match_score"] == 88.0
+    assert cards["Matched Job"]["match_band"] == "good"
+    assert cards["Matched Job"]["match_status"] == "ready"
+    assert cards["Unmatched Job"]["match_score"] is None
+    assert cards["Unmatched Job"]["match_band"] is None
+    assert cards["Unmatched Job"]["match_status"] is None
+
+    # has_match=true keeps only jobs with a ready match
+    r = await client.get("/api/v1/jobs?has_match=true", headers=h)
+    titles = {j["title"] for j in r.json()["items"]}
+    assert "Matched Job" in titles
+    assert "Unmatched Job" not in titles
+
+    # sort=match orders the matched job ahead of the unmatched one
+    r = await client.get("/api/v1/jobs?sort=match", headers=h)
+    ordered = [j["title"] for j in r.json()["items"]]
+    assert ordered.index("Matched Job") < ordered.index("Unmatched Job")
 
 
 async def test_delete_seed_job_is_404(client, db_session):

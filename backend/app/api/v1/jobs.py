@@ -20,12 +20,16 @@ from app.core.db import AsyncSessionLocal
 from app.core.errors import NotFoundError
 from app.core.events import job_channel, sse_event, status_stream
 from app.domain.jobs.service import JobFilters, JobService
+from app.domain.matching.service import MatchService
 from app.models.job import Job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _card(job: Job) -> JobCardOut:
+def _card(
+    job: Job, match: tuple[float | None, str | None, str] | None = None
+) -> JobCardOut:
+    m_score, m_band, m_status = match if match is not None else (None, None, None)
     return JobCardOut(
         id=job.id, title=job.title, company=job.company, location=job.location,
         work_mode=job.work_mode, seniority=job.seniority, employment_type=job.employment_type,
@@ -34,12 +38,15 @@ def _card(job: Job) -> JobCardOut:
         is_seed=job.is_seed, status=job.status, posted_at=job.posted_at, created_at=job.created_at,
         required_skills=[JobSkillOut(slug=s["slug"], label=s["label"], weight=s["weight"])
                         for s in job.required_skills],
+        match_score=m_score, match_band=m_band, match_status=m_status,
     )
 
 
-def _detail(job: Job) -> JobDetailOut:
+def _detail(
+    job: Job, match: tuple[float | None, str | None, str] | None = None
+) -> JobDetailOut:
     return JobDetailOut(
-        **_card(job).model_dump(),
+        **_card(job, match).model_dump(),
         company_domain=job.company_domain,
         experience_min_years=job.experience_min_years,
         experience_max_years=job.experience_max_years,
@@ -68,6 +75,7 @@ async def list_jobs(
     employment_type: str | None = None,
     salary_min: int | None = None,
     skills: str | None = None,
+    has_match: bool = False,
     sort: str = "recent",
     limit: int = 24,
     offset: int = 0,
@@ -82,17 +90,24 @@ async def list_jobs(
         salary_min=salary_min,
         employment_type=employment_type,
         skills=tuple(s for s in (skills or "").split(",") if s),
+        has_match=has_match,
         sort=sort,
         limit=limit,
         offset=offset,
     )
     rows, total = await JobService(db).list_(user.id, filters)
-    return JobListOut(items=[_card(j) for j in rows], total=total, limit=limit, offset=offset)
+    scores = await MatchService(db).job_scores_for(user.id, [j.id for j in rows])
+    return JobListOut(
+        items=[_card(j, scores.get(j.id)) for j in rows],
+        total=total, limit=limit, offset=offset,
+    )
 
 
 @router.get("/{job_id}")
 async def get_job(job_id: uuid.UUID, db: DbDep, user: CurrentUser) -> JobDetailOut:
-    return _detail(await JobService(db).get(user.id, job_id))
+    job = await JobService(db).get(user.id, job_id)
+    scores = await MatchService(db).job_scores_for(user.id, [job.id])
+    return _detail(job, scores.get(job.id))
 
 
 @router.get("/{job_id}/events")

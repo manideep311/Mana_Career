@@ -48,6 +48,8 @@ def _bucket(path: str, method: str) -> str:
     base = get_settings().api_base_path
     if method == "POST" and path in (f"{base}/resumes", f"{base}/jobs"):
         return "upload"
+    if method == "POST" and path in (f"{base}/matches", f"{base}/matches/recompute"):
+        return "llm"
     if method == "POST" and (
         path.endswith("/reprocess") or path.endswith("/confirm-profile")
     ):

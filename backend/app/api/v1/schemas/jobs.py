@@ -44,6 +44,9 @@ class JobCardOut(BaseModel):
     posted_at: dt.datetime | None
     created_at: dt.datetime
     required_skills: list[JobSkillOut]
+    match_score: float | None = None
+    match_band: str | None = None
+    match_status: str | None = None
 
 
 class JobDetailOut(JobCardOut):

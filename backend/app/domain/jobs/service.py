@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, cast, delete, func, or_, select
+from sqlalchemy import Select, and_, cast, delete, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,9 @@ from app.core.logging import current_request_id
 from app.core.queue import enqueue
 from app.domain.jobs.chunking import JobChunkDraft
 from app.domain.jobs.extractor import JobExtraction
+from app.domain.matching.weights import SCORER_VERSION
 from app.models.job import Job, JobChunk
+from app.models.match import JobMatch
 
 _MIN_RAW = 40
 _MAXLEN = {"title": 300, "company": 200, "location": 200, "company_domain": 200}
@@ -32,6 +34,7 @@ class JobFilters:
     salary_min: int | None = None
     employment_type: str | None = None
     skills: tuple[str, ...] = ()
+    has_match: bool = False
     sort: str = "recent"
     limit: int = 24
     offset: int = 0
@@ -102,6 +105,16 @@ class JobService:
             stmt = stmt.where(or_(Job.salary_max >= f.salary_min, Job.salary_max.is_(None)))
         for slug in f.skills:
             stmt = stmt.where(Job.required_skills.op("@>")(cast([{"slug": slug}], JSONB)))
+        if f.has_match:
+            stmt = stmt.where(
+                exists().where(
+                    JobMatch.job_id == Job.id,
+                    JobMatch.user_id == user_id,
+                    JobMatch.resume_version_id.is_(None),
+                    JobMatch.scorer_version == SCORER_VERSION,
+                    JobMatch.status == "ready",
+                )
+            )
         return stmt
 
     async def list_(self, user_id: uuid.UUID, f: JobFilters) -> tuple[list[Job], int]:
@@ -109,8 +122,21 @@ class JobService:
         total = (await self.session.execute(
             select(func.count()).select_from(stmt.order_by(None).subquery())
         )).scalar_one()
+        if f.sort == "match":
+            page_stmt = stmt.join(
+                JobMatch,
+                and_(
+                    JobMatch.job_id == Job.id,
+                    JobMatch.user_id == user_id,
+                    JobMatch.resume_version_id.is_(None),
+                    JobMatch.scorer_version == SCORER_VERSION,
+                ),
+                isouter=True,
+            ).order_by(JobMatch.score.desc().nulls_last(), Job.created_at.desc())
+        else:
+            page_stmt = stmt.order_by(Job.created_at.desc())
         rows = (await self.session.execute(
-            stmt.order_by(Job.created_at.desc()).limit(f.limit).offset(f.offset)
+            page_stmt.limit(f.limit).offset(f.offset)
         )).scalars().all()
         return list(rows), int(total)
 
