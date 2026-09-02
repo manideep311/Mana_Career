@@ -22,8 +22,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
 
+# `'english'::regconfig` (an explicit regconfig constant), NOT a bare string:
+# `to_tsvector(text, text)` is only STABLE, so a bare 'english' makes the whole
+# expression non-IMMUTABLE and Postgres rejects it in a STORED generated column.
 _TSV_EXPR = (
-    "to_tsvector('english', "
+    "to_tsvector('english'::regconfig, "
     "coalesce(title,'') || ' ' || coalesce(company,'') || ' ' || "
     "coalesce(description,'') || ' ' || array_to_string(responsibilities, ' '))"
 )
@@ -156,5 +159,5 @@ class JobChunk(Base, TimestampMixin):
     # The literal dim must stay in sync with app/core/config.py `embed_dim` and the migration.
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
     chunk_tsv: Mapped[str] = mapped_column(
-        TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
+        TSVECTOR, Computed("to_tsvector('english'::regconfig, content)", persisted=True)
     )
