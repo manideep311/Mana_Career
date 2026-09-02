@@ -129,6 +129,7 @@ def _no_enqueue(monkeypatch: pytest.MonkeyPatch) -> None:
         return "test-job"
 
     monkeypatch.setattr("app.domain.resume.service.enqueue", _noop, raising=False)
+    monkeypatch.setattr("app.domain.jobs.service.enqueue", _noop, raising=False)
 
 
 @pytest.fixture(autouse=True)

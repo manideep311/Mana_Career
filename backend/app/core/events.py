@@ -13,6 +13,10 @@ def resume_channel(resume_id: str) -> str:
     return f"sse:resume:{resume_id}"
 
 
+def job_channel(job_id: str) -> str:
+    return f"sse:job:{job_id}"
+
+
 async def publish_status(
     redis: Redis,
     channel: str,

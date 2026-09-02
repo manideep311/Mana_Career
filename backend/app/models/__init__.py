@@ -1,6 +1,7 @@
 # Importing every model module here keeps Base.metadata complete for Alembic.
 from app.models import audit as audit
 from app.models import auth as auth
+from app.models import job as job
 from app.models import profile as profile
 from app.models import resume as resume
 from app.models import skill as skill
