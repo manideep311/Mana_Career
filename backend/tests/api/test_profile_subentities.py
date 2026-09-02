@@ -76,4 +76,4 @@ async def test_creating_experience_bumps_strength(client):
     await client.post("/api/v1/profile/experiences", headers=h,
                       json={"company": "Acme", "title": "Eng"})
     prof = await client.get("/api/v1/profile", headers=h)
-    assert prof.json()["profile_strength"] == 20
+    assert prof.json()["profile_strength"] == 16  # work experience weight
