@@ -7,7 +7,14 @@ from arq.connections import RedisSettings
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.queue import enqueue
-from app.worker.tasks import build_profile, extract_resume, ingest_job, parse_resume, ping
+from app.worker.tasks import (
+    build_profile,
+    extract_resume,
+    ingest_job,
+    parse_resume,
+    ping,
+    score_match,
+)
 from app.worker.tasks.resume import MAX_TRIES
 
 __all__ = ["WorkerSettings", "enqueue"]
@@ -36,6 +43,7 @@ class WorkerSettings:
         extract_resume,
         build_profile,
         ingest_job,
+        score_match,
     ]
     redis_settings = _redis_settings()
     on_startup = _on_startup
