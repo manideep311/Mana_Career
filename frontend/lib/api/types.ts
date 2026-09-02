@@ -151,3 +151,28 @@ export interface ResumeExtraction {
   projects?: ExtractedProject[];
   certifications?: ExtractedCertification[];
 }
+
+export type JobSkillRef = { slug: string; label: string; weight: number };
+export type JobStatus = "ingesting" | "ready" | "failed";
+export interface JobCard {
+  id: string; title: string | null; company: string | null; location: string | null;
+  work_mode: "remote" | "hybrid" | "onsite" | null;
+  seniority: string | null; employment_type: string | null;
+  salary_min: number | null; salary_max: number | null;
+  salary_currency: string | null; salary_period: string | null;
+  is_seed: boolean; status: JobStatus;
+  posted_at: string | null; created_at: string;
+  required_skills: JobSkillRef[];
+}
+export interface JobDetail extends JobCard {
+  company_domain: string | null;
+  experience_min_years: number | null; experience_max_years: number | null;
+  description: string | null; responsibilities: string[];
+  preferred_skills: JobSkillRef[]; raw_text: string;
+}
+export interface JobListResponse { items: JobCard[]; total: number; limit: number; offset: number }
+export interface JobQuery {
+  q?: string; work_mode?: string; seniority?: string; location?: string;
+  employment_type?: string; salary_min?: number; skills?: string; sort?: string;
+  limit?: number; offset?: number;
+}

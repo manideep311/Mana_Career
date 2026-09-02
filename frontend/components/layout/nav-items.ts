@@ -24,7 +24,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: "/dashboard", label: "Home", icon: House, ready: true },
   { href: "/resume", label: "Résumé", icon: ScrollText, ready: true },
-  { href: "/jobs", label: "Jobs", icon: Briefcase, ready: false },
+  { href: "/jobs", label: "Jobs", icon: Briefcase, ready: true },
   { href: "/applications", label: "Applications", icon: FileText, ready: false },
   { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },
   { href: "/profile", label: "Profile", icon: User, ready: true },

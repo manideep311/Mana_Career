@@ -7,6 +7,11 @@ import {
   ExtractedProject,
   ExtractedCertification,
   ItemOut,
+  JobCard,
+  JobDetail,
+  JobListResponse,
+  JobQuery,
+  JobStatus,
   ProfileFull,
   ProfileSkill,
   ResumeExtraction,
@@ -132,6 +137,24 @@ export function makeApi(f: Fetcher) {
           json("POST", { extraction }),
         );
       },
+    },
+    jobs: {
+      async list(query: JobQuery = {}) {
+        const qs = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined && v !== "")
+            .map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<JobListResponse>(`/api/v1/jobs${qs ? `?${qs}` : ""}`);
+      },
+      async get(id: string) { return f<JobDetail>(`/api/v1/jobs/${id}`); },
+      async create(raw_text: string) {
+        return f<{ id: string; status: JobStatus }>("/api/v1/jobs", json("POST", { raw_text }));
+      },
+      async patch(id: string, body: { title?: string }) {
+        return f<JobDetail>(`/api/v1/jobs/${id}`, { method: "PATCH", body: JSON.stringify(body),
+          headers: { "Content-Type": "application/json" } });
+      },
+      async remove(id: string) { return f<void>(`/api/v1/jobs/${id}`, { method: "DELETE" }); },
     },
   };
 }

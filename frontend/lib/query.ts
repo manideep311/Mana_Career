@@ -24,4 +24,7 @@ export const qk = {
   section: (s: Section) => ["profile", s] as const,
   resumes: ["resumes"] as const,
   resumeExtraction: (id: string | null) => ["resume", id, "extraction"] as const,
+  jobs: ["jobs"] as const,
+  jobsList: (q: Record<string, unknown>) => ["jobs", "list", q] as const,
+  job: (id: string) => ["jobs", id] as const,
 };

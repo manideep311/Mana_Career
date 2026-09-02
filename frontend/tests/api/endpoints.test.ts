@@ -86,3 +86,33 @@ describe("profile skills", () => {
     expect(calls[0].init?.method).toBe("POST");
   });
 });
+
+describe("jobs", () => {
+  it("list serialises query params and GETs /jobs", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return { items: [], total: 0 }; }) as unknown as Fetcher);
+    await api.jobs.list({ q: "rust", work_mode: "remote", limit: 12 });
+    expect(calls[0]).toBe("/api/v1/jobs?q=rust&work_mode=remote&limit=12");
+  });
+  it("list with no params GETs bare /jobs", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return { items: [] }; }) as unknown as Fetcher);
+    await api.jobs.list();
+    expect(calls[0]).toBe("/api/v1/jobs");
+  });
+  it("create POSTs { raw_text } to /jobs", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return { id: "j1", status: "ingesting" }; }) as unknown as Fetcher);
+    await api.jobs.create("Senior ML Engineer ...");
+    expect(calls[0].path).toBe("/api/v1/jobs");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ raw_text: "Senior ML Engineer ..." });
+  });
+  it("remove DELETEs /jobs/{id}", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return undefined; }) as unknown as Fetcher);
+    await api.jobs.remove("j1");
+    expect(calls[0].path).toBe("/api/v1/jobs/j1");
+    expect(calls[0].init?.method).toBe("DELETE");
+  });
+});
