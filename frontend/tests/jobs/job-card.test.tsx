@@ -31,4 +31,13 @@ describe("JobCard", () => {
     expect(screen.getByText(/untitled role/i)).toBeInTheDocument();
     expect(screen.queryByText(/sample/i)).not.toBeInTheDocument();
   });
+
+  it("renders the match score badge when the card carries a ready match", () => {
+    render(
+      <JobCard
+        job={{ ...base, match_score: 88, match_band: "good", match_status: "ready" }}
+      />,
+    );
+    expect(screen.getByText("88")).toBeInTheDocument();
+  });
 });

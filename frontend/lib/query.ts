@@ -27,4 +27,7 @@ export const qk = {
   jobs: ["jobs"] as const,
   jobsList: (q: Record<string, unknown>) => ["jobs", "list", q] as const,
   job: (id: string) => ["jobs", id] as const,
+  match: (jobId: string) => ["match", jobId] as const,
+  matchList: (q: Record<string, unknown>) => ["match", "list", q] as const,
+  skillGaps: (jobMatchId: string) => ["skill-gaps", jobMatchId] as const,
 };

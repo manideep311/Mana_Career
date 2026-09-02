@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -13,6 +13,7 @@ import { JobCard } from "@/components/jobs/JobCard";
 import { JobFilters } from "@/components/jobs/JobFilters";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toaster";
 import type { JobQuery } from "@/lib/api/types";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
@@ -40,6 +41,8 @@ export default function JobsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sp = searchParams.toString();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const query = useMemo<JobQuery>(() => {
     const params = new URLSearchParams(sp);
@@ -48,6 +51,7 @@ export default function JobsPage() {
       const value = params.get(key)?.trim();
       if (value) next[key] = value;
     }
+    next.has_match = params.get("has_match") === "true" || undefined;
     const salaryMin = Number(params.get("salary_min"));
     if (Number.isFinite(salaryMin) && salaryMin > 0) next.salary_min = salaryMin;
     const limit = Number(params.get("limit"));
@@ -60,6 +64,16 @@ export default function JobsPage() {
   const jobsQuery = useQuery({
     queryKey: qk.jobsList({ ...query }),
     queryFn: () => api.jobs.list(query),
+  });
+
+  const recomputeMut = useMutation({
+    mutationFn: () => api.matches.recompute({ scope: "all" }),
+    onSuccess: (r) => {
+      toast({ title: `Scoring ${r.count} jobs — refresh in a moment.` });
+      void queryClient.invalidateQueries({ queryKey: qk.jobs });
+    },
+    onError: () =>
+      toast({ title: "Couldn't start matching.", variant: "danger" }),
   });
 
   function goToOffset(nextOffset: number): void {
@@ -142,7 +156,18 @@ export default function JobsPage() {
             own.
           </p>
         </div>
-        <AddJobDialog />
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Phase 5: kick off a full re-score of every tracked job */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => recomputeMut.mutate()}
+            disabled={recomputeMut.isPending}
+          >
+            Match all
+          </Button>
+          <AddJobDialog />
+        </div>
       </header>
 
       <JobFilters />

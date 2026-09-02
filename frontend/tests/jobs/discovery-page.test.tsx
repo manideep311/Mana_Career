@@ -22,6 +22,9 @@ const sampleJob: JobCardT = {
   posted_at: null,
   created_at: "2026-08-20T00:00:00Z",
   required_skills: [{ slug: "python", label: "Python", weight: 0.9 }],
+  match_score: 88,
+  match_band: "good",
+  match_status: "ready",
 };
 
 describe("JobsPage", () => {
@@ -37,6 +40,12 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Senior ML Engineer")).toBeInTheDocument();
     expect(screen.getByText("1 role")).toBeInTheDocument();
+    // Phase 5: the per-card match badge renders from the card's match_* fields…
+    expect(screen.getByText("88")).toBeInTheDocument();
+    // …and the header carries a "Match all" re-score control.
+    expect(
+      screen.getByRole("button", { name: /match all/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows the empty state when no jobs match", async () => {

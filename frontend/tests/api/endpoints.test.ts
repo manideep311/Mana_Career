@@ -116,3 +116,51 @@ describe("jobs", () => {
     expect(calls[0].init?.method).toBe("DELETE");
   });
 });
+
+describe("matches", () => {
+  it("create POSTs { job_id } to /api/v1/matches", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return { id: "m1", status: "scoring" }; }) as unknown as Fetcher);
+    await api.matches.create("j1");
+    expect(calls[0].path).toBe("/api/v1/matches");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ job_id: "j1" });
+  });
+  it("get GETs /api/v1/matches/{id}", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return {}; }) as unknown as Fetcher);
+    await api.matches.get("m1");
+    expect(calls[0]).toBe("/api/v1/matches/m1");
+  });
+  it("recompute POSTs { scope } to /api/v1/matches/recompute", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return { status: "ok", count: 5 }; }) as unknown as Fetcher);
+    await api.matches.recompute({ scope: "all" });
+    expect(calls[0].path).toBe("/api/v1/matches/recompute");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ scope: "all" });
+  });
+  it("components GETs /api/v1/matches/{id}/components", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return []; }) as unknown as Fetcher);
+    await api.matches.components("m1");
+    expect(calls[0]).toBe("/api/v1/matches/m1/components");
+  });
+});
+
+describe("skill gaps", () => {
+  it("list GETs /api/v1/skill-gaps?scope=job&job_match_id={id}", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return []; }) as unknown as Fetcher);
+    await api.skillGaps.list("jm1");
+    expect(calls[0]).toBe("/api/v1/skill-gaps?scope=job&job_match_id=jm1");
+  });
+  it("patch PATCHes { status } to /api/v1/skill-gaps/{id}", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return {}; }) as unknown as Fetcher);
+    await api.skillGaps.patch("g1", "learning");
+    expect(calls[0].path).toBe("/api/v1/skill-gaps/g1");
+    expect(calls[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ status: "learning" });
+  });
+});

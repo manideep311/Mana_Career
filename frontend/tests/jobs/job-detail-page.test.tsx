@@ -6,6 +6,12 @@ import { renderWithProviders, mockPush } from "@/test/utils";
 import JobDetailPage from "@/app/(app)/jobs/[id]/page";
 import type { JobDetail } from "@/lib/api/types";
 
+// The match panel has its own suite; here it's a stub so the detail-page tests
+// stay off its data hooks.
+vi.mock("@/components/jobs/WhyThisMatch", () => ({
+  WhyThisMatch: () => <div>why-this-match</div>,
+}));
+
 /**
  * A `status: "ready"` job with every `JobDetail` field populated. Per RULING
  * R11 the test never touches `useParams` (it stays `() => ({})` from
@@ -49,9 +55,11 @@ describe("JobDetailPage", () => {
 
     await screen.findByText("Senior ML Engineer");
     expect(screen.getByText("Mentor two engineers")).toBeInTheDocument();
+    // Phase 5: the <WhyThisMatch> panel replaces the old placeholder copy.
+    expect(screen.getByText("why-this-match")).toBeInTheDocument();
     expect(
-      screen.getByText(/lands in the next release/i),
-    ).toBeInTheDocument();
+      screen.queryByText(/lands in the next release/i),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /remove/i })).toBeNull();
   });
 

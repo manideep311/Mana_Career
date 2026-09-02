@@ -25,7 +25,14 @@ const SALARY_MINS = [
 ] as const;
 
 /** URL keys this control owns — governs when "Clear filters" appears. */
-const TRACKED = ["q", "work_mode", "seniority", "salary_min"] as const;
+const TRACKED = [
+  "q",
+  "work_mode",
+  "seniority",
+  "salary_min",
+  "has_match",
+  "sort",
+] as const;
 
 const DEBOUNCE_MS = 300;
 
@@ -171,6 +178,36 @@ export function JobFilters() {
           ))}
         </select>
       </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="job-sort" className="text-xs font-medium text-text-muted">
+          Sort
+        </label>
+        <select
+          id="job-sort"
+          value={current("sort")}
+          onChange={(event) => set("sort", event.target.value)}
+          className={selectClass}
+        >
+          <option value="">Newest</option>
+          <option value="match">Best match</option>
+        </select>
+      </div>
+
+      <label
+        htmlFor="job-has-match"
+        className="flex h-9 items-center gap-2 text-sm text-text-muted"
+      >
+        <input
+          id="job-has-match"
+          type="checkbox"
+          checked={current("has_match") === "true"}
+          onChange={(event) =>
+            set("has_match", event.target.checked ? "true" : "")
+          }
+        />
+        Has match
+      </label>
 
       {hasFilters ? (
         <Button type="button" variant="ghost" size="sm" onClick={clearAll}>

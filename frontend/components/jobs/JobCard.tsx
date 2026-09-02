@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MatchBadge } from "@/components/jobs/MatchBadge";
 import type { JobCard as JobCardT } from "@/lib/api/types";
 
 /** Currency code → symbol; unknown codes fall back to `"<CODE> "`. */
@@ -95,6 +96,11 @@ export function JobCard({ job }: { job: JobCardT }) {
           </span>
         ) : null}
         {/* match score: Phase 5 */}
+        <MatchBadge
+          score={job.match_score}
+          band={job.match_band}
+          status={job.match_status}
+        />
       </div>
 
       {tags.length > 0 ? (

@@ -154,6 +154,30 @@ export interface ResumeExtraction {
 
 export type JobSkillRef = { slug: string; label: string; weight: number };
 export type JobStatus = "ingesting" | "ready" | "failed";
+export type MatchBand = "strong" | "good" | "partial" | "weak";
+export type MatchStatus = "scoring" | "ready" | "failed";
+export type SkillGapStatus = "open" | "learning" | "closed";
+export type MatchDimension =
+  | "skill" | "experience" | "education" | "project" | "technology"
+  | "location" | "role" | "seniority" | "salary" | "semantic";
+export interface MatchComponent {
+  dimension: MatchDimension; raw_score: number; weight: number; contribution: number;
+  detail: Record<string, unknown>; evidence: Record<string, unknown>[];
+}
+export interface JobMatch {
+  id: string; job_id: string; status: MatchStatus;
+  score: number | null; band: MatchBand | null;
+  dimension_scores: Record<string, number>;
+  strengths: { dimension: string; raw_score: number; contribution: number }[];
+  gaps: { dimension: string; raw_score: number; weight: number }[];
+  explanation: string | null; computed_at: string | null;
+}
+export interface SkillGap {
+  id: string; scope: "job" | "aggregate"; job_match_id: string | null;
+  skill_slug: string; skill_label: string;
+  severity: "critical" | "important" | "nice_to_have";
+  frequency: number; rationale: string | null; status: SkillGapStatus;
+}
 export interface JobCard {
   id: string; title: string | null; company: string | null; location: string | null;
   work_mode: "remote" | "hybrid" | "onsite" | null;
@@ -163,6 +187,7 @@ export interface JobCard {
   is_seed: boolean; status: JobStatus;
   posted_at: string | null; created_at: string;
   required_skills: JobSkillRef[];
+  match_score?: number | null; match_band?: MatchBand | null; match_status?: MatchStatus | null;
 }
 export interface JobDetail extends JobCard {
   company_domain: string | null;
@@ -174,5 +199,5 @@ export interface JobListResponse { items: JobCard[]; total: number; limit: numbe
 export interface JobQuery {
   q?: string; work_mode?: string; seniority?: string; location?: string;
   employment_type?: string; salary_min?: number; skills?: string; sort?: string;
-  limit?: number; offset?: number;
+  limit?: number; offset?: number; has_match?: boolean;
 }

@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ErrorState } from "@/components/common/ErrorState";
 import { fmtSalary } from "@/components/jobs/JobCard";
+import { WhyThisMatch } from "@/components/jobs/WhyThisMatch";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,8 +27,9 @@ const CHIP_CLASS =
  * While the ingest pipeline is still running (`status === "ingesting"`) this
  * shows a small "we're reading this posting" panel wired to the same SSE stream
  * the Add-a-job flow uses, and swaps itself for the real layout once the stream
- * reports `ready`. The ready layout is the JD proper plus a placeholder for the
- * Phase 5 match breakdown and the Phase 8 Prepare Application flow.
+ * reports `ready`. The ready layout is the JD proper plus the Phase 5 match
+ * breakdown (`<WhyThisMatch>`) and a placeholder for the Phase 8 Prepare
+ * Application flow.
  */
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
@@ -153,21 +155,12 @@ export default function JobDetailPage() {
         ) : null}
       </header>
 
-      <Card>
-        <CardBody className="flex flex-col items-start gap-3">
-          <h2 className="text-base font-semibold text-text">
-            Match &amp; preparation
-          </h2>
-          <p className="text-sm text-text-muted">
-            Your fit for this role — how your skills line up and what to brush up
-            on — lands in the next release.
-          </p>
-          <Button disabled aria-disabled title="Coming in a later release">
-            Prepare application
-          </Button>
-          {/* Phase 5 match breakdown + Phase 8 Prepare Application wiring go here */}
-        </CardBody>
-      </Card>
+      <WhyThisMatch jobId={id} />
+
+      {/* Phase 8: Prepare Application */}
+      <Button disabled title="Coming in a later release">
+        Prepare application
+      </Button>
 
       <div className="flex flex-col gap-6">
         {job.description ? (

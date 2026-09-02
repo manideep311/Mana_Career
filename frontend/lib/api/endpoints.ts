@@ -10,13 +10,18 @@ import {
   JobCard,
   JobDetail,
   JobListResponse,
+  JobMatch,
   JobQuery,
   JobStatus,
+  MatchComponent,
+  MatchStatus,
   ProfileFull,
   ProfileSkill,
   ResumeExtraction,
   ResumeOut,
   Section,
+  SkillGap,
+  SkillGapStatus,
   Strength,
   UserOut,
 } from "@/lib/api/types";
@@ -155,6 +160,31 @@ export function makeApi(f: Fetcher) {
           headers: { "Content-Type": "application/json" } });
       },
       async remove(id: string) { return f<void>(`/api/v1/jobs/${id}`, { method: "DELETE" }); },
+    },
+    matches: {
+      async create(job_id: string) {
+        return f<{ id: string; status: MatchStatus }>("/api/v1/matches", json("POST", { job_id }));
+      },
+      async get(id: string) { return f<JobMatch>(`/api/v1/matches/${id}`); },
+      async list(query: { job_id?: string; min_score?: number; sort?: string } = {}) {
+        const qs = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<{ items: JobMatch[] }>(`/api/v1/matches${qs ? `?${qs}` : ""}`);
+      },
+      async components(id: string) { return f<MatchComponent[]>(`/api/v1/matches/${id}/components`); },
+      async recompute(body: { scope: "all" | string }) {
+        return f<{ status: string; count: number }>("/api/v1/matches/recompute", json("POST", body));
+      },
+    },
+    skillGaps: {
+      async list(job_match_id: string) {
+        return f<SkillGap[]>(`/api/v1/skill-gaps?scope=job&job_match_id=${job_match_id}`);
+      },
+      async patch(id: string, status: SkillGapStatus) {
+        return f<SkillGap>(`/api/v1/skill-gaps/${id}`, { method: "PATCH",
+          body: JSON.stringify({ status }), headers: { "Content-Type": "application/json" } });
+      },
     },
   };
 }
