@@ -16,12 +16,11 @@ depends_on = None
 
 _TS = sa.TIMESTAMP(timezone=True)
 _NOW = sa.text("now()")
-# `'english'::regconfig` (explicit regconfig constant): a bare 'english' string
-# leaves `to_tsvector` only STABLE, which a STORED generated column rejects.
+# STORED generated columns require an IMMUTABLE expression. `array_to_string()`
+# is only STABLE, so `responsibilities` (text[]) stays out of the FTS vector.
 _TSV_EXPR = (
-    "to_tsvector('english'::regconfig, "
-    "coalesce(title,'') || ' ' || coalesce(company,'') || ' ' || "
-    "coalesce(description,'') || ' ' || array_to_string(responsibilities, ' '))"
+    "to_tsvector('english', "
+    "coalesce(title,'') || ' ' || coalesce(company,'') || ' ' || coalesce(description,''))"
 )
 
 
@@ -130,7 +129,7 @@ def upgrade() -> None:
         sa.Column("embed_dim", sa.Integer, nullable=False),
         sa.Column("embedding", Vector(1024)),
         sa.Column("chunk_tsv", pg.TSVECTOR,
-                  sa.Computed("to_tsvector('english'::regconfig, content)", persisted=True)),
+                  sa.Computed("to_tsvector('english', content)", persisted=True)),
         sa.Column("created_at", _TS, nullable=False, server_default=_NOW),
         sa.Column("updated_at", _TS, nullable=False, server_default=_NOW),
         sa.UniqueConstraint("job_id", "chunk_index", name="uq_job_chunks_job_chunk"),
