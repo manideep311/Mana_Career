@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/common/ErrorState";
 import { StrengthMeter } from "@/components/common/StrengthMeter";
 import { ProfileScalarForm } from "@/components/profile/ProfileScalarForm";
+import { ProfileSkills } from "@/components/profile/ProfileSkills";
 import { SubEntityList } from "@/components/profile/SubEntityList";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -79,6 +80,7 @@ export default function ProfilePage() {
             <StrengthMeter
               score={strengthQuery.data.score}
               missing={strengthQuery.data.missing}
+              dimensions={strengthQuery.data.dimensions}
             />
           )}
         </CardBody>
@@ -89,6 +91,15 @@ export default function ProfilePage() {
           <ProfileScalarForm profile={profile} />
         </CardBody>
       </Card>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-text">Skills</h2>
+        <Card>
+          <CardBody>
+            <ProfileSkills />
+          </CardBody>
+        </Card>
+      </section>
 
       {SECTIONS.map(({ section, heading }) => (
         <section key={section} className="flex flex-col gap-4">

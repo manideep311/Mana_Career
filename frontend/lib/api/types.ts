@@ -19,11 +19,16 @@ export interface AccessResponse {
   expires_in: number;
 }
 
+export type StrengthDimension = { key: string; label: string; earned: number; max: number; hint: string; met: boolean };
+
 export interface Strength {
   score: number;
   completeness: Record<string, boolean>;
   missing: string[];
+  dimensions: StrengthDimension[];
 }
+
+export type ProfileSkill = { slug: string; label: string; category: string; proficiency: string | null; years: number | null; source: string; evidence: { kind: string; ref_id: string }[] };
 
 export interface CareerProfile {
   id: string;

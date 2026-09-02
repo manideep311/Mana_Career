@@ -70,3 +70,19 @@ describe("resumes", () => {
     expect(calls[0]).toBe("/api/v1/resumes/r1/extraction");
   });
 });
+
+describe("profile skills", () => {
+  it("skills GETs /profile/skills", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return []; }) as unknown as Fetcher);
+    await api.profile.skills();
+    expect(calls[0]).toBe("/api/v1/profile/skills");
+  });
+  it("rebuild POSTs /profile/rebuild", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return undefined; }) as unknown as Fetcher);
+    await api.profile.rebuild();
+    expect(calls[0].path).toBe("/api/v1/profile/rebuild");
+    expect(calls[0].init?.method).toBe("POST");
+  });
+});

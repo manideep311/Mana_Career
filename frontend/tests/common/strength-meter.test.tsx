@@ -14,4 +14,19 @@ describe("StrengthMeter", () => {
     render(<StrengthMeter score={100} missing={[]} />);
     expect(screen.getByText(/complete/i)).toBeInTheDocument();
   });
+  it("renders a per-dimension breakdown when dimensions are given", () => {
+    render(
+      <StrengthMeter
+        score={22}
+        missing={["x"]}
+        dimensions={[
+          { key: "experience", label: "Work experience", earned: 16, max: 16, hint: "h", met: true },
+          { key: "skills_mapped", label: "Skills mapped", earned: 0, max: 8, hint: "Upload a résumé", met: false },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Work experience")).toBeInTheDocument();
+    expect(screen.getByText("Skills mapped")).toBeInTheDocument();
+    expect(screen.getByText(/upload a résumé/i)).toBeInTheDocument();
+  });
 });

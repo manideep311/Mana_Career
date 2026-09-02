@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 
+import type { StrengthDimension } from "@/lib/api/types";
+
 /**
  * A labelled profile-strength bar.
  *
@@ -16,11 +18,14 @@ function bandColour(score: number): string {
 export function StrengthMeter({
   score,
   missing,
+  dimensions,
 }: {
   score: number;
   missing: string[];
+  dimensions?: StrengthDimension[];
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(score)));
+  const hasBreakdown = dimensions != null && dimensions.length > 0;
 
   return (
     <section className="flex flex-col gap-4">
@@ -59,7 +64,64 @@ export function StrengthMeter({
         </p>
       </details>
 
-      {missing.length > 0 ? (
+      {hasBreakdown ? (
+        // When the backend hands us a per-dimension breakdown, show which
+        // parts of the score are earned and which are still open.
+        <div className="flex flex-col gap-2">
+          {score >= 100 || dimensions.every((d) => d.met) ? (
+            <p className="text-sm font-medium text-positive">
+              Your profile is complete. Nice work.
+            </p>
+          ) : null}
+          <p className="text-sm font-medium text-text">
+            Where your score comes from
+          </p>
+          <ul className="flex flex-col gap-3">
+            {dimensions.map((dim) => {
+              const share =
+                dim.max > 0
+                  ? Math.max(
+                      0,
+                      Math.min(100, Math.round((dim.earned / dim.max) * 100)),
+                    )
+                  : 0;
+              return (
+                <li key={dim.key} className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="text-text">{dim.label}</span>
+                    <span className="tabular-nums text-text-muted">
+                      {dim.earned}/{dim.max}
+                    </span>
+                  </div>
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-surface-sunk"
+                    style={
+                      {
+                        ["--meter" as string]: dim.met
+                          ? "var(--positive)"
+                          : "var(--warning)",
+                      } as CSSProperties
+                    }
+                  >
+                    <div
+                      className="h-full rounded-full bg-[var(--meter)]"
+                      style={{ width: `${share}%` }}
+                    />
+                  </div>
+                  {!dim.met ? (
+                    <p className="text-sm text-text-muted">
+                      <span aria-hidden="true" className="text-warning">
+                        △
+                      </span>{" "}
+                      {dim.hint}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : missing.length > 0 ? (
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-text">To raise your score</p>
           <ul className="flex flex-col gap-1.5">

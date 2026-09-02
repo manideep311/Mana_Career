@@ -8,6 +8,7 @@ import {
   ExtractedCertification,
   ItemOut,
   ProfileFull,
+  ProfileSkill,
   ResumeExtraction,
   ResumeOut,
   Section,
@@ -59,6 +60,12 @@ export function makeApi(f: Fetcher) {
       },
       async strength() {
         return f<Strength>("/api/v1/profile/strength");
+      },
+      async skills() {
+        return f<ProfileSkill[]>("/api/v1/profile/skills");
+      },
+      async rebuild() {
+        return f<void>("/api/v1/profile/rebuild", { method: "POST" });
       },
       items: {
         async list(section: Section) {

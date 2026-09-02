@@ -10,6 +10,7 @@ const strengthStub = {
     score: 20,
     completeness: {},
     missing: ["Add a project"],
+    dimensions: [],
   }),
 };
 

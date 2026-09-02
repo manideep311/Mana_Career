@@ -20,6 +20,7 @@ export function makeQueryClient() {
 export const qk = {
   profile: ["profile"] as const,
   strength: ["profile", "strength"] as const,
+  skills: ["profile", "skills"] as const,
   section: (s: Section) => ["profile", s] as const,
   resumes: ["resumes"] as const,
   resumeExtraction: (id: string | null) => ["resume", id, "extraction"] as const,

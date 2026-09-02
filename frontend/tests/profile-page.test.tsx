@@ -31,8 +31,11 @@ function makeApi() {
         score: 20,
         completeness: {},
         missing: ["Add a project"],
+        dimensions: [],
       }),
       update: vi.fn().mockResolvedValue({}),
+      skills: vi.fn().mockResolvedValue([]),
+      rebuild: vi.fn(),
       items: { list: vi.fn().mockResolvedValue([]) },
     },
   };
