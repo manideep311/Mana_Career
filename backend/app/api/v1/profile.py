@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, status
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DbDep
@@ -11,10 +11,14 @@ from app.api.v1.schemas.profile import (
     SUBENTITY_SCHEMAS,
     CareerProfileOut,
     ProfileFullOut,
+    ProfileSkillOut,
     ReorderIn,
+    SkillRefOut,
+    StrengthDimensionOut,
     StrengthOut,
 )
 from app.api.v1.schemas.profile import CareerProfileUpdate as _Update
+from app.core.queue import enqueue
 from app.domain.profile.service import ProfileService
 from app.domain.profile.strength import ProfileCounts, compute_strength
 
@@ -47,10 +51,53 @@ async def get_strength(db: DbDep, user: CurrentUser) -> StrengthOut:
         projects=len(sections["projects"]),
         certifications=len(sections["certifications"]),
     )
-    result = compute_strength(profile, counts)
+    skills = await ProfileService(db).list_skills(user.id)
+    result = compute_strength(profile, counts, skill_count=len(skills))
     return StrengthOut(
-        score=result.score, completeness=result.completeness, missing=result.missing
+        score=result.score,
+        completeness=result.completeness,
+        missing=result.missing,
+        dimensions=[
+            StrengthDimensionOut(
+                key=d.key,
+                label=d.label,
+                earned=d.earned,
+                max=d.max,
+                hint=d.hint,
+                met=d.met,
+            )
+            for d in result.dimensions
+        ],
     )
+
+
+@router.get("/skills")
+async def get_skills(db: DbDep, user: CurrentUser) -> list[ProfileSkillOut]:
+    rows = await ProfileService(db).list_skills(user.id)
+    return [
+        ProfileSkillOut(
+            slug=s.slug,
+            label=s.label,
+            category=s.category,
+            proficiency=ps.proficiency,
+            years=float(ps.years) if ps.years is not None else None,
+            source=ps.source,
+            evidence=[
+                SkillRefOut(kind=str(r.get("kind", "")), ref_id=r["ref_id"])
+                for r in ps.evidence_refs
+                if r.get("ref_id")
+            ],
+        )
+        for ps, s in rows
+    ]
+
+
+@router.post("/rebuild", status_code=status.HTTP_202_ACCEPTED)
+async def rebuild_profile(user: CurrentUser) -> dict[str, str]:
+    # A stable _job_id collapses a double-click into one build (core.queue
+    # treats the rejected duplicate as success).
+    await enqueue("build_profile", str(user.id), _job_id=f"build_profile:{user.id}")
+    return {"status": "queued"}
 
 
 def _make_subentity_router(section: str) -> APIRouter:

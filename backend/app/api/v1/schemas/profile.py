@@ -70,10 +70,35 @@ class CareerProfileOut(BaseModel):
     updated_at: dt.datetime
 
 
+class StrengthDimensionOut(BaseModel):
+    key: str
+    label: str
+    earned: int
+    max: int  # deliberately shadows the builtin as a field name; Pydantic handles it
+    hint: str
+    met: bool
+
+
 class StrengthOut(BaseModel):
     score: int
     completeness: dict[str, bool]
     missing: list[str]
+    dimensions: list[StrengthDimensionOut]
+
+
+class SkillRefOut(BaseModel):
+    kind: str
+    ref_id: uuid.UUID
+
+
+class ProfileSkillOut(BaseModel):
+    slug: str
+    label: str
+    category: str
+    proficiency: str | None
+    years: float | None
+    source: str
+    evidence: list[SkillRefOut]
 
 
 class ReorderIn(BaseModel):
