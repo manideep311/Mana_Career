@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     embeddings_provider: Literal["fake", "voyage", "openai", "local"] = "fake"
     embed_model: str = "fake-embed-1"
+    voyage_api_key: SecretStr | None = None
     embed_dim: int = 1024
 
     file_store: Literal["local", "s3"] = "local"
