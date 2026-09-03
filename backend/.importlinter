@@ -22,3 +22,12 @@ source_modules =
 forbidden_modules =
     app.api
     app.worker
+
+[importlinter:contract:rag-leaf-ward]
+name = rag is leaf-ward (no sibling-domain imports)
+type = forbidden
+source_modules =
+    app.domain.rag
+forbidden_modules =
+    app.domain.matching
+    app.domain.jobs
