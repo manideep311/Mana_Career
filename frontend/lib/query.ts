@@ -30,4 +30,7 @@ export const qk = {
   match: (jobId: string) => ["match", jobId] as const,
   matchList: (q: Record<string, unknown>) => ["match", "list", q] as const,
   skillGaps: (jobMatchId: string) => ["skill-gaps", jobMatchId] as const,
+  evalRuns: (q: Record<string, unknown>) => ["eval", "runs", q] as const,
+  evalRun: (id: string) => ["eval", "run", id] as const,
+  evalResults: (id: string) => ["eval", "results", id] as const,
 };

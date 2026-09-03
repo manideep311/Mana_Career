@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { NAV, isActive } from "@/components/layout/nav-items";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/providers/AuthProvider";
 
 /**
  * Desktop-only left rail (`hidden md:flex`, `w-60`): the wordmark on top, the
@@ -13,6 +14,8 @@ import { cn } from "@/lib/cn";
  */
 export function Sidebar() {
   const pathname = usePathname() ?? "";
+  const { user } = useAuth();
+  const items = NAV.filter((item) => !item.adminOnly || user?.is_admin);
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
@@ -24,7 +27,7 @@ export function Sidebar() {
       </Link>
 
       <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const Icon = item.icon;
 
           if (!item.ready) {

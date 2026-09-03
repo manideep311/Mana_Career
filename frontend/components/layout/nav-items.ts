@@ -1,6 +1,7 @@
 import {
   Briefcase,
   FileText,
+  FlaskConical,
   House,
   ScrollText,
   Sparkles,
@@ -14,6 +15,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** `false` while the destination route is still being built. */
   ready: boolean;
+  /** Only rendered when the signed-in user is an admin. */
+  adminOnly?: boolean;
 }
 
 /**
@@ -28,6 +31,7 @@ export const NAV: NavItem[] = [
   { href: "/applications", label: "Applications", icon: FileText, ready: false },
   { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },
   { href: "/profile", label: "Profile", icon: User, ready: true },
+  { href: "/eval", label: "Eval", icon: FlaskConical, ready: true, adminOnly: true },
 ];
 
 /** Active when the current path is the item's href or a descendant of it. */

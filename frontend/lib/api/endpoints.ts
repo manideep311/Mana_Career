@@ -2,6 +2,8 @@ import {
   AccessResponse,
   AuthResponse,
   CareerProfile,
+  EvalResult,
+  EvalRun,
   ExtractedExperience,
   ExtractedEducation,
   ExtractedProject,
@@ -184,6 +186,19 @@ export function makeApi(f: Fetcher) {
       async patch(id: string, status: SkillGapStatus) {
         return f<SkillGap>(`/api/v1/skill-gaps/${id}`, { method: "PATCH",
           body: JSON.stringify({ status }), headers: { "Content-Type": "application/json" } });
+      },
+    },
+    eval: {
+      async listRuns(query: { suite?: string; limit?: number; offset?: number } = {}) {
+        const qs = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<{ items: EvalRun[]; total: number }>(`/api/v1/eval/runs${qs ? `?${qs}` : ""}`);
+      },
+      async getRun(id: string) { return f<EvalRun>(`/api/v1/eval/runs/${id}`); },
+      async runResults(id: string) { return f<EvalResult[]>(`/api/v1/eval/runs/${id}/results`); },
+      async createRun(suite: string) {
+        return f<EvalRun>("/api/v1/eval/runs", json("POST", { suite }));
       },
     },
   };

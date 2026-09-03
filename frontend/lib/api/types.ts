@@ -201,3 +201,32 @@ export interface JobQuery {
   employment_type?: string; salary_min?: number; skills?: string; sort?: string;
   limit?: number; offset?: number; has_match?: boolean;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Eval (Phase 6, admin-only)                                                 */
+/* -------------------------------------------------------------------------- */
+
+export type EvalSuite = "retrieval" | "generation" | "matching";
+export type EvalStatus = "running" | "passed" | "failed" | "error";
+
+export interface EvalRun {
+  id: string;
+  suite: EvalSuite;
+  dataset_version: string;
+  git_sha: string;
+  provider: string;
+  model_ids: Record<string, unknown>;
+  metrics: Record<string, number>;
+  status: EvalStatus;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export interface EvalResult {
+  id: string;
+  case_id: string;
+  scores: Record<string, number>;
+  passed: boolean;
+  expected: Record<string, unknown>;
+  actual: Record<string, unknown>;
+}

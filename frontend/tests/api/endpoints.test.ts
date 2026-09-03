@@ -164,3 +164,38 @@ describe("skill gaps", () => {
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({ status: "learning" });
   });
 });
+
+describe("eval", () => {
+  it("listRuns GETs /api/v1/eval/runs", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return { items: [], total: 0 }; }) as unknown as Fetcher);
+    await api.eval.listRuns();
+    expect(calls[0]).toBe("/api/v1/eval/runs");
+  });
+  it("listRuns serialises query params", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return { items: [], total: 0 }; }) as unknown as Fetcher);
+    await api.eval.listRuns({ suite: "retrieval", limit: 5 });
+    expect(calls[0]).toBe("/api/v1/eval/runs?suite=retrieval&limit=5");
+  });
+  it("getRun GETs /api/v1/eval/runs/{id}", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return {}; }) as unknown as Fetcher);
+    await api.eval.getRun("r1");
+    expect(calls[0]).toBe("/api/v1/eval/runs/r1");
+  });
+  it("runResults GETs /api/v1/eval/runs/{id}/results", async () => {
+    const calls: string[] = [];
+    const api = makeApi((async (p: string) => { calls.push(p); return []; }) as unknown as Fetcher);
+    await api.eval.runResults("r1");
+    expect(calls[0]).toBe("/api/v1/eval/runs/r1/results");
+  });
+  it("createRun POSTs { suite: 'retrieval' } to /api/v1/eval/runs", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = makeApi((async (path: string, init?: RequestInit) => { calls.push({ path, init }); return {}; }) as unknown as Fetcher);
+    await api.eval.createRun("retrieval");
+    expect(calls[0].path).toBe("/api/v1/eval/runs");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ suite: "retrieval" });
+  });
+});

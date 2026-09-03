@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { NAV, isActive } from "@/components/layout/nav-items";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/providers/AuthProvider";
 
 /**
  * Fixed bottom bar for small screens (`md:hidden`). Only the ready routes get a
@@ -12,7 +13,10 @@ import { cn } from "@/lib/cn";
  */
 export function MobileNav() {
   const pathname = usePathname() ?? "";
-  const items = NAV.filter((item) => item.ready);
+  const { user } = useAuth();
+  const items = NAV.filter(
+    (item) => item.ready && (!item.adminOnly || user?.is_admin),
+  );
 
   return (
     <nav
