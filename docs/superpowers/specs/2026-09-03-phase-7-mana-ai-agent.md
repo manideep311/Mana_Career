@@ -27,9 +27,26 @@ through the fake providers — deterministic, no network.
 - Python 3.12, FastAPI, SQLAlchemy 2.0 async + asyncpg, Alembic (chain
   `…→0009_eval→0010_ai`, single head), `pydantic-settings`, `structlog`, `import-linter`,
   ARQ + Redis.
-- **New deps:** `langgraph` and `langgraph-checkpoint-postgres`, both pinned; `uv.lock`
-  regenerated. `mypy` gets `[[tool.mypy.overrides]] module = "langgraph.*"`,
-  `ignore_missing_imports = true` if the shipped stubs are incomplete.
+- **New deps** (verified installed + API-checked): `langgraph==1.2.11`,
+  `langgraph-checkpoint-postgres==3.1.2`, and **`psycopg[binary]`** (the postgres
+  checkpointer needs libpq — the binary wheel provides it on CI's Ubuntu). `uv.lock`
+  regenerated. `langgraph` ships `py.typed`; add a `[[tool.mypy.overrides]]` for
+  `langgraph.*` only if `mypy` actually complains.
+  **Verified LangGraph API** (spike):
+  - `StateGraph(ManaState)` with a `TypedDict` state; `Annotated[list, operator.add]`
+    reducers accumulate across nodes (confirmed).
+  - `g.add_node(name, fn)`, `g.set_entry_point(name)`,
+    `g.add_conditional_edges(name, router_fn, {label_or_END: target_or_END})`,
+    `g.add_edge(name, END)`, `g.compile(checkpointer=...)`.
+  - `cg.astream(input, config={"configurable": {"thread_id": run_id}}, stream_mode="updates")`
+    → async-iterates `{node_name: <partial state dict>}` once per super-step.
+  - `snap = await cg.aget_state(config)` → `snap.values` is the merged final state dict.
+  - `MemorySaver` is `from langgraph.checkpoint.memory import MemorySaver`.
+  - **The Windows dev box has no libpq** → `from langgraph.checkpoint.postgres.aio import
+    AsyncPostgresSaver` raises `ImportError` at import time. `checkpointer.py` therefore
+    imports `AsyncPostgresSaver` **lazily**, inside `get_checkpointer`'s non-test branch —
+    `import app.domain.agents.checkpointer`, `ruff`, `mypy app`, and `pytest --collect-only`
+    must all succeed without libpq. CI (Ubuntu, `psycopg[binary]`) exercises the real saver.
 - `LLM_PROVIDER=fake`, `EMBEDDINGS_PROVIDER=fake`, and the new `SEARCH_PROVIDER=fake` in
   CI and every test. `FakeLLMProvider` stubs structured output to empty; a
   `FakeSearchProvider` returns a deterministic canned result list. No live LLM / search
@@ -274,26 +291,36 @@ event to the run's Redis channel).
 
 ### 1.10 `checkpointer.py`
 ```python
-_saver: BaseCheckpointSaver | None = None
+from langgraph.checkpoint.memory import MemorySaver   # safe — no libpq
+# NB: do NOT import AsyncPostgresSaver at module top — libpq may be absent (dev box).
 
-async def get_checkpointer(settings: Settings) -> BaseCheckpointSaver:
+_saver = None  # process singleton (BaseCheckpointSaver | AbstractAsyncContextManager)
+
+async def get_checkpointer(settings: Settings):
     global _saver
-    if _saver is not None: return _saver
+    if _saver is not None:
+        return _saver
     if settings.env == "test":
         _saver = MemorySaver()
-    else:
-        _saver = AsyncPostgresSaver.from_conn_string(settings.database_url_sync_dsn)  # its own pool
+        return _saver
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver   # lazy
+    # from_conn_string returns an async CM; enter it once for the process lifetime.
+    _cm = AsyncPostgresSaver.from_conn_string(_psycopg_dsn(settings))
+    _saver = await _cm.__aenter__()
     return _saver
 
 async def ensure_checkpointer_tables(settings: Settings) -> None:
-    if settings.env == "test": return
+    if settings.env == "test":
+        return
     saver = await get_checkpointer(settings)
-    await saver.setup()   # idempotent; creates checkpoints* tables if absent
+    await saver.setup()   # idempotent — creates the checkpoints* tables if absent
 ```
-`database_url_sync_dsn` — a `Settings` property that strips `+asyncpg` for the
-psycopg-based `AsyncPostgresSaver`, OR use `AsyncPostgresSaver` async-pool constructor
-with the asyncpg URL if the library supports it — the implementer confirms from the
-installed `langgraph-checkpoint-postgres` API.
+`_psycopg_dsn(settings)` — the psycopg (v3) DSN form: `settings.database_url` with the
+`+asyncpg` driver token stripped (`postgresql://…`, not `postgresql+asyncpg://…`). The
+implementer confirms `from_conn_string`'s exact contract against the installed
+`langgraph_checkpoint.postgres.aio` module and adjusts (it is an async context manager in
+3.1.2 — enter it once and keep the entered saver as the singleton; the process never
+exits it, which is fine for a long-lived worker).
 
 ### 1.11 `service.py` — `AgentService`
 ```python
