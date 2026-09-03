@@ -157,7 +157,9 @@ class MatchService:
             summary_text=summary_text,
         )
 
-    async def build_job_snapshot(self, job_id: uuid.UUID) -> JobSnapshot:
+    async def build_job_snapshot(
+        self, job_id: uuid.UUID, *, chunk_embeddings: list[tuple[float, ...]] | None = None
+    ) -> JobSnapshot:
         job = await self.session.get(Job, job_id)
         if job is None:
             raise NotFoundError(detail="Job not found")
@@ -173,14 +175,21 @@ class MatchService:
             for s in (*job.required_skills, *job.preferred_skills)
             if s.get("label")
         )
-        vectors = (await self.session.execute(
-            select(JobChunk.embedding)
-            .where(JobChunk.job_id == job_id)
-            .order_by(JobChunk.chunk_index)
-        )).scalars().all()
-        chunk_embeddings = tuple(
-            tuple(float(x) for x in vec) for vec in vectors if vec is not None
-        )
+        if chunk_embeddings is not None:
+            # Caller supplied a curated subset (RAG retrieval) -- use it verbatim
+            # and skip the all-chunks query entirely.
+            resolved_embeddings = tuple(
+                tuple(float(x) for x in vec) for vec in chunk_embeddings
+            )
+        else:
+            vectors = (await self.session.execute(
+                select(JobChunk.embedding)
+                .where(JobChunk.job_id == job_id)
+                .order_by(JobChunk.chunk_index)
+            )).scalars().all()
+            resolved_embeddings = tuple(
+                tuple(float(x) for x in vec) for vec in vectors if vec is not None
+            )
 
         return JobSnapshot(
             required=required,
@@ -194,7 +203,7 @@ class MatchService:
             work_mode=job.work_mode,
             salary_min=job.salary_min,
             salary_max=job.salary_max,
-            chunk_embeddings=chunk_embeddings,
+            chunk_embeddings=resolved_embeddings,
         )
 
     # ------------------------------------------------------------------ #

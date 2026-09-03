@@ -25,6 +25,8 @@ from app.domain.matching.explainer import GapRationaleWriter, MatchExplainer
 from app.domain.matching.gaps import derive_gaps
 from app.domain.matching.scorer import inputs_hash, score
 from app.domain.matching.service import MatchService
+from app.domain.rag.service import RagService
+from app.domain.rag.types import RetrievalSource
 from app.models.job import Job
 from app.models.match import JobMatch
 from app.worker.dead_letter import record_failure
@@ -67,7 +69,34 @@ async def score_match(ctx: dict[str, Any], job_match_id: str) -> dict[str, Any]:
         try:
             svc = MatchService(session, settings=settings)
             profile = await svc.build_profile_snapshot(m.user_id)
-            job = await svc.build_job_snapshot(m.job_id)
+
+            # Semantic dimension: curate the job chunks the scorer averages via
+            # RAG retrieval over the profile summary. Read-only -- no writes, no
+            # commit, no enqueue. Its own try/except degrades a rag/embedding
+            # failure to ``None`` (the pre-Phase-6 all-chunks path) rather than
+            # letting it bubble into the F3 retry block below.
+            rag_sub: list[tuple[float, ...]] | None = None
+            if profile.summary_text:
+                try:
+                    rag = RagService(session, get_embeddings_provider(settings))
+                    retrieved = await rag.retrieve(
+                        profile.summary_text,
+                        source=RetrievalSource.JOB_CHUNKS,
+                        user_id=m.user_id,
+                        job_id=m.job_id,
+                        k=8,
+                    )
+                    rag_sub = [
+                        b.embedding for b in retrieved.blocks if b.embedding is not None
+                    ] or None
+                except Exception:
+                    log.warning(
+                        "score_match_rag_retrieve_failed",
+                        job_match_id=job_match_id,
+                        exc_info=True,
+                    )
+                    rag_sub = None
+            job = await svc.build_job_snapshot(m.job_id, chunk_embeddings=rag_sub)
             expected_hash = inputs_hash(profile, job)
             if m.status == "ready" and m.inputs_hash == expected_hash:
                 return {"job_match_id": job_match_id, "status": "skipped"}

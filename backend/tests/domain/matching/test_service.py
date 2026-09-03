@@ -107,3 +107,11 @@ async def test_job_scores_for(db_session):
     await db_session.flush()
     scores = await svc.job_scores_for(u.id, [j.id])
     assert scores[j.id] == (92.0, "strong", "ready")
+
+
+async def test_build_job_snapshot_accepts_chunk_embedding_override(db_session):
+    _u, _p, _s, j = await _seed(db_session, "ms-override@x.com")
+    svc = MatchService(db_session)
+    js = await svc.build_job_snapshot(j.id, chunk_embeddings=[(0.5,) * 4, (0.25,) * 4])
+    assert len(js.chunk_embeddings) == 2
+    assert js.chunk_embeddings[0] == (0.5, 0.5, 0.5, 0.5)

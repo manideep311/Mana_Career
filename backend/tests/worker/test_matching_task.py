@@ -74,6 +74,8 @@ async def test_score_match_marks_ready_and_writes_components(db_session, monkeyp
     assert m.score is not None
     assert m.band is not None
     assert len(m.dimension_scores) == 10
+    # rag in the loop must not break the semantic dimension
+    assert 0.0 <= m.dimension_scores["semantic"] <= 1.0
 
     comps = (
         await db_session.execute(
