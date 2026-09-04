@@ -1,4 +1,5 @@
 # Importing every model module here keeps Base.metadata complete for Alembic.
+from app.models import ai as ai
 from app.models import audit as audit
 from app.models import auth as auth
 from app.models import eval as eval
