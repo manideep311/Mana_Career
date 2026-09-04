@@ -1,0 +1,110 @@
+"""``graph.py`` -- assemble the Mana Career LangGraph ``StateGraph``.
+
+``AgentDeps`` is the per-run bag of collaborators every node closes over;
+``build_graph`` registers the eight nodes, wires the supervisor fan-out and the
+linear ``understand_job`` chain, and compiles against the run's checkpointer.
+
+The supervisor and halted nodes are wired **raw** (they never raise and only
+emit routing / terminal keys); the six worker nodes are wrapped in
+:func:`app.domain.agents.budget.guard` so stop requests and budget breaches
+become terminal state.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from functools import partial
+from typing import Any
+
+from langgraph.graph import END, StateGraph
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain.agents.budget import guard
+from app.domain.agents.nodes.halted import halted
+from app.domain.agents.nodes.job_research import job_research
+from app.domain.agents.nodes.job_retrieval import job_retrieval
+from app.domain.agents.nodes.match_analysis import match_analysis
+from app.domain.agents.nodes.recommendation import recommendation
+from app.domain.agents.nodes.respond import respond
+from app.domain.agents.nodes.skill_gap import skill_gap
+from app.domain.agents.nodes.supervisor import supervisor
+from app.domain.agents.search.provider import SearchProvider
+from app.domain.agents.service import AgentService
+from app.domain.agents.state import ManaState
+from app.domain.embeddings.provider import EmbeddingsProvider
+from app.domain.llm.provider import LLMProvider
+
+
+@dataclass
+class AgentDeps:
+    session: AsyncSession
+    llm: LLMProvider
+    embeddings: EmbeddingsProvider
+    search: SearchProvider
+    checkpointer: Any
+    publish: Callable[[dict[str, Any]], Awaitable[None]]
+    svc: AgentService
+    user_id: uuid.UUID
+    run_id: str
+    session_id: uuid.UUID
+
+
+def _route_from_supervisor(state: ManaState) -> str:
+    return state.get("_route", "halted")
+
+
+def _halt_or(next_node: str) -> Callable[[ManaState], str]:
+    return lambda s: "halted" if s.get("status") in {"halted", "error"} else next_node
+
+
+def build_graph(deps: AgentDeps) -> Any:
+    g = StateGraph(ManaState)
+    g.add_node("supervisor", partial(supervisor, deps=deps))
+    for name, fn in [
+        ("job_research", job_research),
+        ("job_retrieval", job_retrieval),
+        ("match_analysis", match_analysis),
+        ("skill_gap", skill_gap),
+        ("recommendation", recommendation),
+        ("respond", respond),
+    ]:
+        # guard() returns a precisely-typed Callable[[ManaState], Awaitable[...]];
+        # langgraph's add_node overloads only bind NodeInputT off a partial/Runnable.
+        g.add_node(name, guard(name, partial(fn, deps=deps)))  # type: ignore[call-overload]
+    g.add_node("halted", partial(halted, deps=deps))
+    g.set_entry_point("supervisor")
+    g.add_conditional_edges(
+        "supervisor",
+        _route_from_supervisor,
+        {"job_retrieval": "job_retrieval", "job_research": "job_research", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "job_research",
+        _halt_or("job_retrieval"),
+        {"job_retrieval": "job_retrieval", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "job_retrieval",
+        _halt_or("match_analysis"),
+        {"match_analysis": "match_analysis", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "match_analysis",
+        _halt_or("skill_gap"),
+        {"skill_gap": "skill_gap", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "skill_gap",
+        _halt_or("recommendation"),
+        {"recommendation": "recommendation", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "recommendation",
+        _halt_or("respond"),
+        {"respond": "respond", "halted": "halted"},
+    )
+    g.add_edge("respond", END)
+    g.add_edge("halted", END)
+    return g.compile(checkpointer=deps.checkpointer)
