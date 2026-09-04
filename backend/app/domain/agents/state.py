@@ -3,7 +3,9 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, Literal, TypedDict
 
-AgentGoal = Literal["understand_job", "enrich_job", "analyze_profile", "prepare_application"]
+AgentGoal = Literal[
+    "understand_job", "enrich_job", "analyze_profile", "prepare_application", "tailor_resume"
+]
 
 NODE_ORDER: tuple[str, ...] = (
     "supervisor",
@@ -12,6 +14,8 @@ NODE_ORDER: tuple[str, ...] = (
     "match_analysis",
     "skill_gap",
     "recommendation",
+    "resume_tailoring",
+    "claim_validator",
     "respond",
 )
 

@@ -1,11 +1,12 @@
 """``graph.py`` -- assemble the Mana Career LangGraph ``StateGraph``.
 
 ``AgentDeps`` is the per-run bag of collaborators every node closes over;
-``build_graph`` registers the eight nodes, wires the supervisor fan-out and the
-linear ``understand_job`` chain, and compiles against the run's checkpointer.
+``build_graph`` registers the ten nodes, wires the supervisor fan-out and the
+linear ``understand_job`` and ``tailor_resume`` chains, and compiles against
+the run's checkpointer.
 
 The supervisor and halted nodes are wired **raw** (they never raise and only
-emit routing / terminal keys); the six worker nodes are wrapped in
+emit routing / terminal keys); the eight worker nodes are wrapped in
 :func:`app.domain.agents.budget.guard` so stop requests and budget breaches
 become terminal state.
 """
@@ -22,12 +23,14 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.agents.budget import guard
+from app.domain.agents.nodes.claim_validator import claim_validator
 from app.domain.agents.nodes.halted import halted
 from app.domain.agents.nodes.job_research import job_research
 from app.domain.agents.nodes.job_retrieval import job_retrieval
 from app.domain.agents.nodes.match_analysis import match_analysis
 from app.domain.agents.nodes.recommendation import recommendation
 from app.domain.agents.nodes.respond import respond
+from app.domain.agents.nodes.resume_tailoring import resume_tailoring
 from app.domain.agents.nodes.skill_gap import skill_gap
 from app.domain.agents.nodes.supervisor import supervisor
 from app.domain.agents.search.provider import SearchProvider
@@ -68,6 +71,8 @@ def build_graph(deps: AgentDeps) -> Any:
         ("match_analysis", match_analysis),
         ("skill_gap", skill_gap),
         ("recommendation", recommendation),
+        ("resume_tailoring", resume_tailoring),
+        ("claim_validator", claim_validator),
         ("respond", respond),
     ]:
         # guard() returns a precisely-typed Callable[[ManaState], Awaitable[...]];
@@ -78,7 +83,12 @@ def build_graph(deps: AgentDeps) -> Any:
     g.add_conditional_edges(
         "supervisor",
         _route_from_supervisor,
-        {"job_retrieval": "job_retrieval", "job_research": "job_research", "halted": "halted"},
+        {
+            "job_retrieval": "job_retrieval",
+            "job_research": "job_research",
+            "resume_tailoring": "resume_tailoring",
+            "halted": "halted",
+        },
     )
     g.add_conditional_edges(
         "job_research",
@@ -102,6 +112,16 @@ def build_graph(deps: AgentDeps) -> Any:
     )
     g.add_conditional_edges(
         "recommendation",
+        _halt_or("respond"),
+        {"respond": "respond", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "resume_tailoring",
+        _halt_or("claim_validator"),
+        {"claim_validator": "claim_validator", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "claim_validator",
         _halt_or("respond"),
         {"respond": "respond", "halted": "halted"},
     )

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.domain.agents.blocks import (
     InsufficientInfoBlock,
     JobCardBlock,
+    ResumeSuggestionBlock,
     TextBlock,
     dump_blocks,
 )
@@ -60,7 +61,18 @@ async def respond(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
     n = len(match_refs)
 
     blocks: list[BaseModel]
-    if not state.get("retrieved_jobs"):
+    if state.get("tailored_resume_version_id"):
+        text = (
+            "Here's a version of your résumé tuned for this role — open it to "
+            "see what changed."
+        )
+        blocks = [
+            TextBlock(markdown=text),
+            ResumeSuggestionBlock(
+                suggestion_id=uuid.UUID(state["tailored_resume_version_id"])
+            ),
+        ]
+    elif not state.get("retrieved_jobs"):
         blocks = [
             InsufficientInfoBlock(
                 topic="job_match",
