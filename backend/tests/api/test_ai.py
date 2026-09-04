@@ -87,31 +87,31 @@ async def test_relay_yields_open_then_relays_until_done():
         await gen.aclose()
 
 
-async def test_post_message_returns_sse_and_starts_run(client, db_session):
-    from app.core.config import get_settings
-    from app.core.redis import redis_from_settings
+async def test_post_message_starts_a_run_and_streams(client, db_session, monkeypatch):
+    # Swap the unbounded relay for a two-frame finite generator so the buffering
+    # ASGI test transport can drain POST /messages; assert the route composed
+    # the run (session -> running with a run_id) before handing off to the stream.
+    from app.core.events import sse_event
+
+    async def _finite_relay(_redis, _channel, *, run_id=None):
+        yield sse_event({"event": "open", "run_id": run_id})
+        yield sse_event({"event": "done", "status": "completed"})
+
+    monkeypatch.setattr("app.api.v1.ai._relay", _finite_relay)
 
     h = await _auth(client, "ai-msg@x.com")
     sid = await _new_session(client, h)
-
-    async with client.stream(
-        "POST",
+    r = await client.post(
         f"/api/v1/ai/sessions/{sid}/messages",
         headers=h,
         json={"content": "find jobs that match my experience"},
-    ) as resp:
-        assert resp.status_code == 200
-        assert resp.headers["content-type"].startswith("text/event-stream")
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+    assert "event: done" in r.text
 
     row = (await client.get(f"/api/v1/ai/sessions/{sid}", headers=h)).json()
-    assert row["run_id"]
-    assert row["status"] == "running"
-    # Close out the relay that the abandoned stream left subscribed.
-    redis = redis_from_settings(get_settings())
-    await redis.publish(
-        f"sse:ai:{row['run_id']}",
-        json.dumps({"event": "done", "status": "completed", "totals": {}}),
-    )
+    assert row["run_id"] and row["status"] == "running"
 
 
 async def test_goal_returns_202_run_ref(client, db_session):
