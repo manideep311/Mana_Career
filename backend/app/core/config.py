@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     voyage_api_key: SecretStr | None = None
     embed_dim: int = 1024
 
+    search_provider: Literal["fake", "tavily", "brave"] = "fake"
+    search_api_key: SecretStr | None = None
+
     file_store: Literal["local", "s3"] = "local"
     file_store_local_dir: str = "./var/files"
     resume_max_bytes: int = 10_485_760
