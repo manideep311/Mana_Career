@@ -235,3 +235,44 @@ describe("ai", () => {
     expect(calls[0].path).toBe("/api/v1/ai/actions?session_id=s1");
   });
 });
+
+describe("resume tailoring", () => {
+  it("tailor POSTs { job_id } to /resumes/{id}/tailor", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).resumes.tailor("r1", { job_id: "j1" });
+    expect(calls[0].path).toBe("/api/v1/resumes/r1/tailor");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ job_id: "j1" });
+  });
+
+  it("versions GETs /resumes/{id}/versions", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).resumes.versions("r1");
+    expect(calls[0].path).toBe("/api/v1/resumes/r1/versions");
+  });
+
+  it("version GETs /resumes/versions/{id}", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).resumes.version("v1");
+    expect(calls[0].path).toBe("/api/v1/resumes/versions/v1");
+  });
+
+  it("diff GETs /resumes/versions/{id}/diff with no query by default", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).resumes.diff("v1");
+    expect(calls[0].path).toBe("/api/v1/resumes/versions/v1/diff");
+  });
+
+  it("diff GETs /resumes/versions/{id}/diff?against=... when given", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).resumes.diff("v1", "base");
+    expect(calls[0].path).toBe("/api/v1/resumes/versions/v1/diff?against=base");
+  });
+
+  it("renderUrl builds a fmt-qualified path with no fetch call", () => {
+    const { f } = recordingFetcher();
+    const url = makeApi(f).resumes.renderUrl("v1", "pdf");
+    expect(url).toBe("/api/v1/resumes/versions/v1/render?fmt=pdf");
+    expect(f).not.toHaveBeenCalled();
+  });
+});

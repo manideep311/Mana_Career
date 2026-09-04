@@ -24,8 +24,11 @@ import {
   MatchStatus,
   ProfileFull,
   ProfileSkill,
+  ResumeDiff,
   ResumeExtraction,
   ResumeOut,
+  ResumeVersion,
+  ResumeVersionDetail,
   RunRef,
   Section,
   SkillGap,
@@ -149,6 +152,22 @@ export function makeApi(f: Fetcher) {
           `/api/v1/resumes/${id}/confirm-profile`,
           json("POST", { extraction }),
         );
+      },
+      async tailor(id: string, body: { job_id: string }) {
+        return f<RunRef>(`/api/v1/resumes/${id}/tailor`, json("POST", body));
+      },
+      async versions(id: string) {
+        return f<{ items: ResumeVersion[] }>(`/api/v1/resumes/${id}/versions`);
+      },
+      async version(versionId: string) {
+        return f<ResumeVersionDetail>(`/api/v1/resumes/versions/${versionId}`);
+      },
+      async diff(versionId: string, against?: string) {
+        const qs = against ? `?against=${encodeURIComponent(against)}` : "";
+        return f<ResumeDiff>(`/api/v1/resumes/versions/${versionId}/diff${qs}`);
+      },
+      renderUrl(versionId: string, fmt: "md" | "html" | "pdf" | "docx") {
+        return `/api/v1/resumes/versions/${versionId}/render?fmt=${fmt}`;
       },
     },
     jobs: {

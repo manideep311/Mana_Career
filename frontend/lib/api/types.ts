@@ -152,6 +152,43 @@ export interface ResumeExtraction {
   certifications?: ExtractedCertification[];
 }
 
+export interface ClaimValidation {
+  checked: number;
+  unsupported: string[];
+  supported_ratio: number;
+  passed: boolean;
+}
+
+export type ResumeVersionKind = "base_snapshot" | "manual_edit" | "ai_tailored";
+
+export interface ResumeVersion {
+  id: string;
+  kind: ResumeVersionKind;
+  label: string | null;
+  job_id: string | null;
+  parent_version_id: string | null;
+  created_by: "user" | "mana_ai";
+  created_at: string;
+  claim_validation: Partial<ClaimValidation>;
+}
+
+export interface ResumeVersionDetail extends ResumeVersion {
+  content: ResumeExtraction;
+}
+
+export type FieldDeltaOp = "added" | "removed" | "changed" | "reordered";
+
+export interface FieldDelta {
+  path: string;
+  op: FieldDeltaOp;
+  before: unknown;
+  after: unknown;
+}
+
+export interface ResumeDiff {
+  deltas: FieldDelta[];
+}
+
 export type JobSkillRef = { slug: string; label: string; weight: number };
 export type JobStatus = "ingesting" | "ready" | "failed";
 export type MatchBand = "strong" | "good" | "partial" | "weak";
@@ -266,22 +303,26 @@ export interface InsufficientInfoBlock {
   topic: string;
   missing: string[];
 }
-/** Declared-but-unrendered block kinds (Phases 8–12) — the registry shows a muted fallback. */
+/** Declared-but-unrendered block kinds (Phases 9–12) — the registry shows a muted fallback. */
 export interface StubBlock {
   kind:
     | "match_score"
     | "skill_gap"
     | "career_recommendation"
     | "learning_recommendation"
-    | "resume_suggestion"
     | "application_draft"
     | "approval_action";
   [field: string]: unknown;
+}
+export interface ResumeSuggestionBlock {
+  kind: "resume_suggestion";
+  suggestion_id: string;
 }
 export type ResponseBlock =
   | TextBlock
   | JobCardBlock
   | InsufficientInfoBlock
+  | ResumeSuggestionBlock
   | StubBlock;
 
 export interface Message {
@@ -329,4 +370,5 @@ export interface AiActionList {
 }
 export interface RunRef {
   run_id: string;
+  session_id: string;
 }

@@ -24,6 +24,10 @@ export const qk = {
   section: (s: Section) => ["profile", s] as const,
   resumes: ["resumes"] as const,
   resumeExtraction: (id: string | null) => ["resume", id, "extraction"] as const,
+  resumeVersions: (resumeId: string) => ["resume", resumeId, "versions"] as const,
+  resumeVersion: (id: string) => ["resume-version", id] as const,
+  resumeDiff: (id: string, against?: string) =>
+    ["resume-version", id, "diff", against ?? null] as const,
   jobs: ["jobs"] as const,
   jobsList: (q: Record<string, unknown>) => ["jobs", "list", q] as const,
   job: (id: string) => ["jobs", id] as const,
