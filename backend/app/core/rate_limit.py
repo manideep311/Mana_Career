@@ -56,6 +56,8 @@ def _bucket(path: str, method: str) -> str:
         return "llm"
     if path.startswith(f"{base}/ai"):
         return "llm"
+    if method == "POST" and path.endswith("/tailor"):
+        return "llm"
     if path.startswith(f"{base}/auth"):
         return "auth"
     return "read"

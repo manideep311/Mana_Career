@@ -60,3 +60,5 @@ def test_bucket_classifies_llm_tier():
     assert _bucket(f"/api/v1/resumes/{uid}/reprocess", "GET") == "read"
     assert _bucket(f"/api/v1/resumes/{uid}/confirm-profile", "GET") == "read"
     assert _bucket("/api/v1/matches", "GET") == "read"
+    assert _bucket("/api/v1/resumes/abc/tailor", "POST") == "llm"
+    assert _bucket("/api/v1/resumes/abc/tailor", "GET") == "read"

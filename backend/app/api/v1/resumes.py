@@ -2,20 +2,58 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Request, UploadFile, status
+from fastapi import APIRouter, File, Request, Response, UploadFile, status
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep
-from app.api.v1.schemas.resume import ConfirmProfileIn, ResumeOut, ResumePatchIn
+from app.api.v1.schemas.ai import RunRefOut
+from app.api.v1.schemas.resume import (
+    ConfirmProfileIn,
+    FieldDeltaOut,
+    ResumeDiffOut,
+    ResumeOut,
+    ResumePatchIn,
+    ResumeVersionDetailOut,
+    ResumeVersionListOut,
+    ResumeVersionOut,
+    TailorIn,
+)
 from app.core.db import AsyncSessionLocal
-from app.core.errors import NotFoundError, ValidationAppError
+from app.core.errors import ConflictError, NotFoundError, ValidationAppError
 from app.core.events import resume_channel, sse_event, status_stream
+from app.domain.agents.service import AgentService
+from app.domain.documents.renderer import DocumentRenderer, RenderFormat, RenderUnavailable
 from app.domain.resume.extractor import ResumeExtraction
 from app.domain.resume.service import ResumeService
+from app.domain.resume.version_service import ResumeDiff, TailoringService
+from app.domain.resume.version_service import diff as diff_versions
+from app.models.resume_version import ResumeVersion
 
 router = APIRouter(prefix="/resumes", tags=["resumes"])
+
+
+def _version_out(v: ResumeVersion) -> ResumeVersionOut:
+    return ResumeVersionOut(
+        id=v.id, kind=v.kind, label=v.label, job_id=v.job_id,
+        parent_version_id=v.parent_version_id, created_by=v.created_by,
+        created_at=v.created_at,
+        claim_validation=v.generation_meta.get("claim_validation", {}),
+    )
+
+
+def _version_detail_out(v: ResumeVersion) -> ResumeVersionDetailOut:
+    return ResumeVersionDetailOut(**_version_out(v).model_dump(), content=v.content)
+
+
+def _diff_out(d: ResumeDiff) -> ResumeDiffOut:
+    return ResumeDiffOut(
+        deltas=[
+            FieldDeltaOut(path=x.path, op=x.op, before=x.before, after=x.after)
+            for x in d.deltas
+        ]
+    )
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -127,3 +165,72 @@ async def confirm_profile(
     resume_id: uuid.UUID, body: ConfirmProfileIn, db: DbDep, user: CurrentUser
 ) -> None:
     await ResumeService(db).confirm_profile(user.id, resume_id, body.extraction)
+
+
+@router.post("/{resume_id}/tailor", status_code=status.HTTP_202_ACCEPTED)
+async def tailor_resume_route(
+    resume_id: uuid.UUID, body: TailorIn, db: DbDep, user: CurrentUser
+) -> RunRefOut:
+    resume = await ResumeService(db).get(user.id, resume_id)
+    if resume.confirmed_at is None:
+        raise ValidationAppError("Confirm this résumé before tailoring it.")
+    session = await AgentService(db).create_session(user.id, kind="agent_run")
+    run_id = await AgentService(db).start_run(
+        user.id, session.id, goal="tailor_resume",
+        inputs={"job_id": str(body.job_id), "resume_id": str(resume_id)},
+    )
+    await db.commit()
+    return RunRefOut(run_id=run_id)
+
+
+@router.get("/{resume_id}/versions")
+async def list_resume_versions(
+    resume_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> ResumeVersionListOut:
+    versions = await TailoringService(db).list_versions(user.id, resume_id)
+    return ResumeVersionListOut(items=[_version_out(v) for v in versions])
+
+
+@router.get("/versions/{version_id}")
+async def get_resume_version(
+    version_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> ResumeVersionDetailOut:
+    version = await TailoringService(db).get_version(user.id, version_id)
+    return _version_detail_out(version)
+
+
+@router.get("/versions/{version_id}/diff")
+async def get_resume_version_diff(
+    version_id: uuid.UUID, db: DbDep, user: CurrentUser, against: str | None = None
+) -> ResumeDiffOut:
+    svc = TailoringService(db)
+    version = await svc.get_version(user.id, version_id)
+    if against and against != "base":
+        try:
+            against_id = uuid.UUID(against)
+        except ValueError as exc:
+            raise ValidationAppError("`against` must be a version id or \"base\".") from exc
+        base_version = await svc.get_version(user.id, against_id)
+    elif version.parent_version_id is not None:
+        base_version = await svc.get_version(user.id, version.parent_version_id)
+    else:
+        base_version = await svc.ensure_base_snapshot(user.id, version.resume_id)
+    base_cv = ResumeExtraction.model_validate(base_version.content)
+    other_cv = ResumeExtraction.model_validate(version.content)
+    return _diff_out(diff_versions(base_cv, other_cv))
+
+
+@router.get("/versions/{version_id}/render")
+async def render_resume_version(
+    version_id: uuid.UUID,
+    db: DbDep,
+    user: CurrentUser,
+    fmt: Literal["md", "html", "pdf", "docx"] = "md",
+) -> Response:
+    version = await TailoringService(db).get_version(user.id, version_id)
+    cv = ResumeExtraction.model_validate(version.content)
+    try:
+        doc = DocumentRenderer().render(cv, RenderFormat(fmt))
+    except RenderUnavailable as exc:
+        raise ConflictError(str(exc), code="render_unavailable") from exc
+    return Response(content=doc.data, media_type=doc.media_type)
