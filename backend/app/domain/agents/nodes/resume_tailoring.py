@@ -5,8 +5,10 @@ Loads the user's confirmed résumé and the target job, runs the LLM-tailoring
 and persists the draft as a new ``ai_tailored`` ``ResumeVersion``.
 """
 
+import uuid
 from typing import TYPE_CHECKING, Any
 
+from app.core.errors import NotFoundError
 from app.domain.agents.state import ManaState
 from app.domain.generation.service import GenerationService
 from app.domain.jobs.service import JobService
@@ -17,6 +19,7 @@ from app.domain.resume.tailoring import tailor_resume
 from app.domain.resume.version_service import TailoringService
 from app.models.job import Job
 from app.models.profile import CareerProfile
+from app.models.resume import Resume
 
 if TYPE_CHECKING:
     from app.domain.agents.graph import AgentDeps
@@ -70,12 +73,34 @@ def _summarise_job(job: Job) -> str:
     return text[:_MAX_JOB_CHARS]
 
 
-async def resume_tailoring(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
-    job_id = state["inputs"]["job_id"]
+async def _choose_resume(state: ManaState, *, deps: "AgentDeps") -> Resume | None:
+    """The résumé this run tailors.
+
+    Honors an explicit ``inputs.resume_id`` (the `/resumes/{id}/tailor` route
+    always passes one, and its own guard already requires it to be
+    confirmed) so a user with more than one confirmed résumé gets the one
+    they picked rather than whichever happens to be primary. Falls back to
+    the old primary-or-first-confirmed pick for any caller that omits it.
+    """
+    resume_id = state["inputs"].get("resume_id")
+    if resume_id:
+        try:
+            resume = await ResumeService(deps.session).get(
+                deps.user_id, uuid.UUID(resume_id)
+            )
+        except (NotFoundError, ValueError):
+            return None
+        return resume if resume.confirmed_at is not None else None
 
     resumes = await ResumeService(deps.session).list_(deps.user_id)
     confirmed = [r for r in resumes if r.confirmed_at is not None]
-    chosen = next((r for r in confirmed if r.is_primary), confirmed[0] if confirmed else None)
+    return next((r for r in confirmed if r.is_primary), confirmed[0] if confirmed else None)
+
+
+async def resume_tailoring(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
+    job_id = state["inputs"]["job_id"]
+
+    chosen = await _choose_resume(state, deps=deps)
     if chosen is None:
         return {
             "status": "halted",
