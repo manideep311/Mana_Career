@@ -7,9 +7,10 @@ Redis pub/sub channel (the SSE cases publish a synthetic ``done`` frame to drive
 
 from __future__ import annotations
 
-import asyncio
 import json
 import uuid
+
+import pytest
 
 
 async def _auth(client, email="ai-api@x.com"):
@@ -55,49 +56,62 @@ async def test_list_sessions_returns_total(client, db_session):
     assert body["total"] >= 1
 
 
-async def test_post_message_streams_sse_open_then_done(client, db_session):
+async def test_relay_yields_open_then_relays_until_done():
+    # `_relay` at the generator level — drive it by hand so the subscribe
+    # happens (first __anext__) before we publish the terminal frame. The ASGI
+    # test transport buffers response bodies, so a frame-by-frame test through
+    # `client.stream(...)` would deadlock; this is transport-independent.
+    from app.api.v1.ai import _relay
+    from app.core.config import get_settings
+    from app.core.redis import redis_from_settings
+
+    redis = redis_from_settings(get_settings())
+    channel = f"sse:ai:test-{uuid.uuid4().hex}"
+    gen = _relay(redis, channel, run_id="run-xyz")
+    try:
+        first = await gen.__anext__()
+        assert first.event == "open"
+        assert json.loads(first.data)["run_id"] == "run-xyz"
+
+        await redis.publish(
+            channel,
+            json.dumps({"event": "done", "status": "completed", "totals": {}}),
+        )
+        second = await gen.__anext__()
+        assert second.event == "done"
+        assert json.loads(second.data)["status"] == "completed"
+
+        with pytest.raises(StopAsyncIteration):
+            await gen.__anext__()
+    finally:
+        await gen.aclose()
+
+
+async def test_post_message_returns_sse_and_starts_run(client, db_session):
     from app.core.config import get_settings
     from app.core.redis import redis_from_settings
 
     h = await _auth(client, "ai-msg@x.com")
     sid = await _new_session(client, h)
+
+    async with client.stream(
+        "POST",
+        f"/api/v1/ai/sessions/{sid}/messages",
+        headers=h,
+        json={"content": "find jobs that match my experience"},
+    ) as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+
+    row = (await client.get(f"/api/v1/ai/sessions/{sid}", headers=h)).json()
+    assert row["run_id"]
+    assert row["status"] == "running"
+    # Close out the relay that the abandoned stream left subscribed.
     redis = redis_from_settings(get_settings())
-
-    async def _run() -> list[str]:
-        seen: list[str] = []
-        pending_event: str | None = None
-        async with client.stream(
-            "POST",
-            f"/api/v1/ai/sessions/{sid}/messages",
-            headers=h,
-            json={"content": "find jobs that match my experience"},
-        ) as resp:
-            assert resp.status_code == 200
-            assert resp.headers["content-type"].startswith("text/event-stream")
-
-            async for line in resp.aiter_lines():
-                text = line.strip()
-                if text.startswith("event:"):
-                    pending_event = text.split(":", 1)[1].strip()
-                    seen.append(pending_event)
-                    if pending_event == "done":
-                        break
-                    continue
-                if text.startswith("data:") and pending_event == "open":
-                    # The `open` frame carries the run_id; stand in for the
-                    # worker's terminal frame so the relay closes.
-                    run_id = json.loads(text.split(":", 1)[1].strip())["run_id"]
-                    await redis.publish(
-                        f"sse:ai:{run_id}",
-                        json.dumps(
-                            {"event": "done", "status": "completed", "totals": {}}
-                        ),
-                    )
-        return seen
-
-    seen = await asyncio.wait_for(_run(), timeout=30)
-    assert seen[0] == "open"
-    assert "done" in seen
+    await redis.publish(
+        f"sse:ai:{row['run_id']}",
+        json.dumps({"event": "done", "status": "completed", "totals": {}}),
+    )
 
 
 async def test_goal_returns_202_run_ref(client, db_session):
