@@ -124,13 +124,14 @@ async def test_second_message_while_running_is_422(client, db_session):
     h = await _auth(client, "ai-busy@x.com")
     sid = await _new_session(client, h)
 
-    async with client.stream(
-        "POST",
-        f"/api/v1/ai/sessions/{sid}/messages",
+    # Start the first run via the goal endpoint (202, no streaming body to hold
+    # open) so the session is left in `running` for the concurrency check.
+    r1 = await client.post(
+        f"/api/v1/ai/sessions/{sid}/goal",
         headers=h,
-        json={"content": "find jobs that match my experience"},
-    ) as resp:
-        assert resp.status_code == 200  # first run started; session is "running"
+        json={"goal": "understand_job", "inputs": {}},
+    )
+    assert r1.status_code == 202
 
     r2 = await client.post(
         f"/api/v1/ai/sessions/{sid}/messages",

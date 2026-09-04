@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import uuid
@@ -81,16 +82,23 @@ def _action_out(a: AiAction) -> AiActionOut:
 
 # --------------------------------------------------------------------------- #
 # SSE relay — a thin local variant of `app.core.events.status_stream`, keyed on
-# the worker's `event == "done"` sentinel instead of a status set.
+# the worker's `event == "done"` sentinel instead of a status set. Bounded by a
+# hard wall-clock cap so an abandoned stream (a client that opened `/events` or
+# `/messages` and vanished without the disconnect propagating) can never pin a
+# subscription forever — a run's own deadline is 180s, so 300s is dead.
 # --------------------------------------------------------------------------- #
+_RELAY_MAX_SECONDS = 300.0
+
+
 async def _relay(redis: Redis, channel: str) -> AsyncIterator[ServerSentEvent]:
     pubsub = redis.pubsub()  # no I/O until subscribe()
+    deadline = asyncio.get_running_loop().time() + _RELAY_MAX_SECONDS
     try:
         await pubsub.subscribe(channel)
         yield sse_event({"event": "open"})  # only after the subscription is live
-        while True:
+        while asyncio.get_running_loop().time() < deadline:
             msg = await pubsub.get_message(
-                ignore_subscribe_messages=True, timeout=20.0
+                ignore_subscribe_messages=True, timeout=5.0
             )
             if msg is None:
                 # EventSourceResponse emits its own keepalive comments.
@@ -105,6 +113,8 @@ async def _relay(redis: Redis, channel: str) -> AsyncIterator[ServerSentEvent]:
             yield sse_event(payload)
             if payload.get("event") == "done":
                 return
+        # Cap reached with no terminal frame — close the stream cleanly.
+        yield sse_event({"event": "done", "status": "timeout", "totals": {}})
     finally:
         with contextlib.suppress(Exception):
             await pubsub.unsubscribe(channel)
