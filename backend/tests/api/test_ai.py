@@ -65,6 +65,7 @@ async def test_post_message_streams_sse_open_then_done(client, db_session):
 
     async def _run() -> list[str]:
         seen: list[str] = []
+        pending_event: str | None = None
         async with client.stream(
             "POST",
             f"/api/v1/ai/sessions/{sid}/messages",
@@ -74,26 +75,24 @@ async def test_post_message_streams_sse_open_then_done(client, db_session):
             assert resp.status_code == 200
             assert resp.headers["content-type"].startswith("text/event-stream")
 
-            # `run_id` is committed by the route before the response returns.
-            row = (await client.get(f"/api/v1/ai/sessions/{sid}", headers=h)).json()
-            assert row["run_id"]
-
             async for line in resp.aiter_lines():
                 text = line.strip()
-                if not text.startswith("event:"):
+                if text.startswith("event:"):
+                    pending_event = text.split(":", 1)[1].strip()
+                    seen.append(pending_event)
+                    if pending_event == "done":
+                        break
                     continue
-                name = text.split(":", 1)[1].strip()
-                seen.append(name)
-                if name == "open":
-                    # Subscription is live; stand in for the worker's terminal frame.
+                if text.startswith("data:") and pending_event == "open":
+                    # The `open` frame carries the run_id; stand in for the
+                    # worker's terminal frame so the relay closes.
+                    run_id = json.loads(text.split(":", 1)[1].strip())["run_id"]
                     await redis.publish(
-                        f"sse:ai:{row['run_id']}",
+                        f"sse:ai:{run_id}",
                         json.dumps(
                             {"event": "done", "status": "completed", "totals": {}}
                         ),
                     )
-                if name == "done":
-                    break
         return seen
 
     seen = await asyncio.wait_for(_run(), timeout=30)

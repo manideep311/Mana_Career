@@ -90,12 +90,17 @@ def _action_out(a: AiAction) -> AiActionOut:
 _RELAY_MAX_SECONDS = 300.0
 
 
-async def _relay(redis: Redis, channel: str) -> AsyncIterator[ServerSentEvent]:
+async def _relay(
+    redis: Redis, channel: str, *, run_id: str | None = None
+) -> AsyncIterator[ServerSentEvent]:
     pubsub = redis.pubsub()  # no I/O until subscribe()
     deadline = asyncio.get_running_loop().time() + _RELAY_MAX_SECONDS
+    open_frame: dict[str, Any] = {"event": "open"}
+    if run_id is not None:
+        open_frame["run_id"] = run_id
     try:
         await pubsub.subscribe(channel)
-        yield sse_event({"event": "open"})  # only after the subscription is live
+        yield sse_event(open_frame)  # only after the subscription is live
         while asyncio.get_running_loop().time() < deadline:
             msg = await pubsub.get_message(
                 ignore_subscribe_messages=True, timeout=5.0
@@ -171,7 +176,7 @@ async def post_message(
     run_id = await svc.start_run(user.id, session_id, goal=goal, inputs=inputs)
     # The SSE body outlives the request-scoped autocommit, so persist now.
     await db.commit()
-    return EventSourceResponse(_relay(redis, f"sse:ai:{run_id}"))
+    return EventSourceResponse(_relay(redis, f"sse:ai:{run_id}", run_id=run_id))
 
 
 @router.post("/sessions/{session_id}/goal", status_code=status.HTTP_202_ACCEPTED)
@@ -196,7 +201,7 @@ async def session_events(
     rid = run_id or (await AgentService(db).get_session(user.id, session_id)).run_id
     if not rid:
         raise NotFoundError("No run for this session")
-    return EventSourceResponse(_relay(redis, f"sse:ai:{rid}"))
+    return EventSourceResponse(_relay(redis, f"sse:ai:{rid}", run_id=rid))
 
 
 @router.post("/sessions/{session_id}/stop", status_code=status.HTTP_202_ACCEPTED)
