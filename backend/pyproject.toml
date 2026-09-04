@@ -25,6 +25,9 @@ dependencies = [
   "langgraph==1.2.11",
   "langgraph-checkpoint-postgres==3.1.2",
   "psycopg[binary]>=3.3.5",
+  "markdown-it-py>=3.0.0",
+  "python-docx>=1.1.2",
+  "xhtml2pdf>=0.2.16",
 ]
 
 [dependency-groups]
@@ -67,6 +70,10 @@ plugins = ["pydantic.mypy"]
 strict = true
 disallow_untyped_decorators = false
 warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = "xhtml2pdf.*"
+ignore_missing_imports = true
 
 [build-system]
 requires = ["hatchling"]
