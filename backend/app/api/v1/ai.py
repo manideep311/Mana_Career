@@ -187,7 +187,7 @@ async def post_goal(
         user.id, session_id, goal=body.goal, inputs=body.inputs
     )
     await db.commit()
-    return RunRefOut(run_id=run_id)
+    return RunRefOut(run_id=run_id, session_id=str(session_id))
 
 
 @router.get("/sessions/{session_id}/events")

@@ -180,7 +180,7 @@ async def tailor_resume_route(
         inputs={"job_id": str(body.job_id), "resume_id": str(resume_id)},
     )
     await db.commit()
-    return RunRefOut(run_id=run_id)
+    return RunRefOut(run_id=run_id, session_id=str(session.id))
 
 
 @router.get("/{resume_id}/versions")

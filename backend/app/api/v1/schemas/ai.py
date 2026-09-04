@@ -80,3 +80,7 @@ class AiActionListOut(BaseModel):
 
 class RunRefOut(BaseModel):
     run_id: str
+    # Lets a caller that doesn't already hold the session id (e.g. the résumé
+    # tailor route, which creates a fresh session per run) build the
+    # `/ai/sessions/{session_id}/events?run_id=...` URL to watch the run.
+    session_id: str
