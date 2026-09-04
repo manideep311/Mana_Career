@@ -7,12 +7,14 @@ from arq.connections import RedisSettings
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.queue import enqueue
+from app.domain.agents.checkpointer import ensure_checkpointer_tables
 from app.worker.tasks import (
     build_profile,
     extract_resume,
     ingest_job,
     parse_resume,
     ping,
+    run_agent,
     score_match,
 )
 from app.worker.tasks.resume import MAX_TRIES
@@ -29,6 +31,7 @@ def _redis_settings() -> RedisSettings:
 
 async def _on_startup(ctx: dict[str, Any]) -> None:
     configure_logging(_settings)
+    await ensure_checkpointer_tables(_settings)
     log.info("worker_started")
 
 
@@ -44,6 +47,7 @@ class WorkerSettings:
         build_profile,
         ingest_job,
         score_match,
+        run_agent,
     ]
     redis_settings = _redis_settings()
     on_startup = _on_startup

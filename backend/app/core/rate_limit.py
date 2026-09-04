@@ -54,6 +54,8 @@ def _bucket(path: str, method: str) -> str:
         path.endswith("/reprocess") or path.endswith("/confirm-profile")
     ):
         return "llm"
+    if path.startswith(f"{base}/ai"):
+        return "llm"
     if path.startswith(f"{base}/auth"):
         return "auth"
     return "read"

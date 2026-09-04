@@ -54,6 +54,8 @@ def test_bucket_classifies_llm_tier():
     assert _bucket(f"/api/v1/resumes/{uid}/confirm-profile", "POST") == "llm"
     assert _bucket("/api/v1/matches", "POST") == "llm"
     assert _bucket("/api/v1/matches/recompute", "POST") == "llm"
+    assert _bucket("/api/v1/ai/sessions", "POST") == "llm"
+    assert _bucket("/api/v1/ai/sessions/x/events", "GET") == "llm"
     # A GET to the same paths is not an LLM-tier call.
     assert _bucket(f"/api/v1/resumes/{uid}/reprocess", "GET") == "read"
     assert _bucket(f"/api/v1/resumes/{uid}/confirm-profile", "GET") == "read"
