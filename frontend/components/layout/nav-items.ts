@@ -1,4 +1,5 @@
 import {
+  Activity,
   Briefcase,
   FileText,
   FlaskConical,
@@ -30,6 +31,7 @@ export const NAV: NavItem[] = [
   { href: "/jobs", label: "Jobs", icon: Briefcase, ready: true },
   { href: "/applications", label: "Applications", icon: FileText, ready: false },
   { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },
+  { href: "/activity", label: "Activity", icon: Activity, ready: true },
   { href: "/profile", label: "Profile", icon: User, ready: true },
   { href: "/eval", label: "Eval", icon: FlaskConical, ready: true, adminOnly: true },
 ];
