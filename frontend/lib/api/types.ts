@@ -230,3 +230,103 @@ export interface EvalResult {
   expected: Record<string, unknown>;
   actual: Record<string, unknown>;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Mana AI agent (Phase 7)                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type AgentGoal =
+  | "understand_job"
+  | "enrich_job"
+  | "analyze_profile"
+  | "prepare_application";
+
+export type AiSessionStatus =
+  | "idle"
+  | "running"
+  | "awaiting_approval"
+  | "completed"
+  | "rejected"
+  | "halted"
+  | "error";
+
+export type MessageRole = "user" | "assistant" | "tool" | "system";
+
+export interface TextBlock {
+  kind: "text";
+  markdown: string;
+}
+export interface JobCardBlock {
+  kind: "job_card";
+  job_id: string;
+  match_id: string | null;
+}
+export interface InsufficientInfoBlock {
+  kind: "insufficient_info";
+  topic: string;
+  missing: string[];
+}
+/** Declared-but-unrendered block kinds (Phases 8–12) — the registry shows a muted fallback. */
+export interface StubBlock {
+  kind:
+    | "match_score"
+    | "skill_gap"
+    | "career_recommendation"
+    | "learning_recommendation"
+    | "resume_suggestion"
+    | "application_draft"
+    | "approval_action";
+  [field: string]: unknown;
+}
+export type ResponseBlock =
+  | TextBlock
+  | JobCardBlock
+  | InsufficientInfoBlock
+  | StubBlock;
+
+export interface Message {
+  id: string;
+  role: MessageRole;
+  content: string;
+  blocks: ResponseBlock[];
+  created_at: string;
+}
+export interface AiSessionSummary {
+  id: string;
+  kind: "chat" | "agent_run";
+  goal: string | null;
+  title: string | null;
+  status: AiSessionStatus;
+  run_id: string | null;
+  totals: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+}
+export interface AiSession extends AiSessionSummary {
+  messages: Message[];
+}
+export interface AiSessionList {
+  items: AiSessionSummary[];
+  total: number;
+}
+export interface AiAction {
+  id: string;
+  ai_session_id: string | null;
+  run_id: string | null;
+  node: string;
+  action_key: string;
+  summary: string;
+  status: "ok" | "warning" | "error";
+  entity_type: string | null;
+  entity_id: string | null;
+  occurred_at: string;
+}
+export interface AiActionList {
+  items: AiAction[];
+  total: number;
+}
+export interface RunRef {
+  run_id: string;
+}

@@ -33,4 +33,7 @@ export const qk = {
   evalRuns: (q: Record<string, unknown>) => ["eval", "runs", q] as const,
   evalRun: (id: string) => ["eval", "run", id] as const,
   evalResults: (id: string) => ["eval", "results", id] as const,
+  aiSessions: ["ai", "sessions"] as const,
+  aiSession: (id: string) => ["ai", "session", id] as const,
+  aiActions: (q: Record<string, unknown>) => ["ai", "actions", q] as const,
 };

@@ -1,5 +1,10 @@
 import {
   AccessResponse,
+  AgentGoal,
+  AiAction,
+  AiActionList,
+  AiSession,
+  AiSessionList,
   AuthResponse,
   CareerProfile,
   EvalResult,
@@ -21,6 +26,7 @@ import {
   ProfileSkill,
   ResumeExtraction,
   ResumeOut,
+  RunRef,
   Section,
   SkillGap,
   SkillGapStatus,
@@ -199,6 +205,32 @@ export function makeApi(f: Fetcher) {
       async runResults(id: string) { return f<EvalResult[]>(`/api/v1/eval/runs/${id}/results`); },
       async createRun(suite: string) {
         return f<EvalRun>("/api/v1/eval/runs", json("POST", { suite }));
+      },
+    },
+    ai: {
+      async createSession(body: { kind?: "chat" | "agent_run"; context?: Record<string, unknown> } = {}) {
+        return f<AiSession>("/api/v1/ai/sessions", json("POST", body));
+      },
+      async listSessions(query: { limit?: number; offset?: number } = {}) {
+        const qs = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined && String(v) !== "").map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<AiSessionList>(`/api/v1/ai/sessions${qs ? `?${qs}` : ""}`);
+      },
+      async getSession(id: string) {
+        return f<AiSession>(`/api/v1/ai/sessions/${id}`);
+      },
+      async startGoal(id: string, body: { goal: AgentGoal; inputs?: Record<string, unknown> }) {
+        return f<RunRef>(`/api/v1/ai/sessions/${id}/goal`, json("POST", { inputs: {}, ...body }));
+      },
+      async stopRun(id: string) {
+        return f<void>(`/api/v1/ai/sessions/${id}/stop`, { method: "POST" });
+      },
+      async listActions(query: { session_id?: string; limit?: number; offset?: number } = {}) {
+        const qs = new URLSearchParams(
+          Object.entries(query).filter(([, v]) => v !== undefined && String(v) !== "").map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<AiActionList>(`/api/v1/ai/actions${qs ? `?${qs}` : ""}`);
       },
     },
   };

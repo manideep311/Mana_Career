@@ -199,3 +199,39 @@ describe("eval", () => {
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({ suite: "retrieval" });
   });
 });
+
+describe("ai", () => {
+  it("creates a session with a JSON body", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).ai.createSession({ kind: "chat" });
+    expect(calls[0].path).toBe("/api/v1/ai/sessions");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ kind: "chat" });
+  });
+
+  it("lists sessions with query params", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).ai.listSessions({ limit: 20, offset: 0 });
+    expect(calls[0].path).toBe("/api/v1/ai/sessions?limit=20&offset=0");
+  });
+
+  it("startGoal always sends an inputs object", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).ai.startGoal("s1", { goal: "understand_job" });
+    expect(calls[0].path).toBe("/api/v1/ai/sessions/s1/goal");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ inputs: {}, goal: "understand_job" });
+  });
+
+  it("stopRun posts with no body", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).ai.stopRun("s1");
+    expect(calls[0].path).toBe("/api/v1/ai/sessions/s1/stop");
+    expect(calls[0].init?.method).toBe("POST");
+  });
+
+  it("listActions filters by session", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).ai.listActions({ session_id: "s1" });
+    expect(calls[0].path).toBe("/api/v1/ai/actions?session_id=s1");
+  });
+});
