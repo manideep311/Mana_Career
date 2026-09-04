@@ -7,6 +7,7 @@ from app.models import job as job
 from app.models import match as match
 from app.models import profile as profile
 from app.models import resume as resume
+from app.models import resume_version as resume_version
 from app.models import skill as skill
 from app.models import user as user
 from app.models.base import Base
