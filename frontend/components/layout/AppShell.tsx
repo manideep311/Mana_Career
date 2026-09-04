@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ManaPanelDock } from "@/components/ai/ManaPanelDock";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -16,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <MobileNav />
+      <ManaPanelDock />
     </div>
   );
 }
