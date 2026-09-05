@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import uuid
 
+from eval.suites.generation import run_generation_suite
 from eval.suites.retrieval import run_retrieval_suite
 from fastapi import APIRouter, status
 from sqlalchemy import func, select
@@ -49,20 +50,21 @@ def _result_out(r: EvalResult) -> EvalResultOut:
 
 @router.post("/runs", status_code=status.HTTP_202_ACCEPTED)
 async def create_eval_run(body: EvalRunIn, db: DbDep, _: CurrentAdmin) -> EvalRunOut:
-    # `suite` is a Literal["retrieval"]; only the retrieval suite is wired up.
     git_sha = os.environ.get("GITHUB_SHA", "dev")[:40]
-    await run_retrieval_suite(
-        db,
-        provider=get_settings().embeddings_provider,
-        write_db=True,
-        git_sha=git_sha,
-    )
-    # `run_retrieval_suite(write_db=True)` flushes the EvalRun + EvalResult rows;
+    if body.suite == "retrieval":
+        await run_retrieval_suite(
+            db, provider=get_settings().embeddings_provider, write_db=True, git_sha=git_sha,
+        )
+    else:
+        await run_generation_suite(
+            db, llm_provider=get_settings().llm_provider, write_db=True, git_sha=git_sha,
+        )
+    # `run_*_suite(write_db=True)` flushes the EvalRun + EvalResult rows;
     # `get_session` commits them when this handler returns (no explicit commit — R9).
     run = (
         await db.execute(
             select(EvalRun)
-            .where(EvalRun.suite == "retrieval")
+            .where(EvalRun.suite == body.suite)
             .order_by(EvalRun.started_at.desc())
             .limit(1)
         )

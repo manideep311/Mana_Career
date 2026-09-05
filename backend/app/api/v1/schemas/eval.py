@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 class EvalRunIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    suite: Literal["retrieval"]
+    suite: Literal["retrieval", "generation"]
 
 
 class EvalRunOut(BaseModel):

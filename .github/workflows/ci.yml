@@ -81,6 +81,13 @@ jobs:
           LLM_PROVIDER: fake
           JWT_SECRET: ci-not-secret
           REDIS_URL: redis://localhost:6379/0
+      - run: uv run python -m eval.run generation --write-db --provider fake
+        env:
+          DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
+          EMBEDDINGS_PROVIDER: fake
+          LLM_PROVIDER: fake
+          JWT_SECRET: ci-not-secret
+          REDIS_URL: redis://localhost:6379/0
 
   frontend:
     runs-on: ubuntu-latest
