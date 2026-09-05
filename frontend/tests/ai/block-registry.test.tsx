@@ -39,4 +39,33 @@ describe("BlockView", () => {
     renderWithProviders(<BlockView block={{ kind: "approval_action", approval_id: "a1" } as never} />);
     expect(screen.getByText(/not available yet/i)).toBeInTheDocument();
   });
+
+  it("renders resume_suggestion by fetching the version", async () => {
+    renderWithProviders(
+      <BlockView block={{ kind: "resume_suggestion", suggestion_id: "v1" }} />,
+      {
+        api: {
+          resumes: {
+            version: vi.fn(async () => ({
+              id: "v1",
+              kind: "ai_tailored",
+              label: null,
+              job_id: "j1",
+              parent_version_id: null,
+              created_by: "mana_ai",
+              created_at: "2026-09-04T00:00:00Z",
+              claim_validation: { checked: 5, unsupported: [], supported_ratio: 1, passed: true },
+              content: {},
+            })),
+          },
+        },
+      },
+    );
+    expect(await screen.findByText("Your résumé was tailored for this role")).toBeInTheDocument();
+    expect(screen.getByText("5 of 5 claims grounded in your résumé")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View changes" })).toHaveAttribute(
+      "href",
+      "/resume/versions/v1",
+    );
+  });
 });
