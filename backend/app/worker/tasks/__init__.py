@@ -1,4 +1,4 @@
-from app.worker.tasks.agent import run_agent
+from app.worker.tasks.agent import resume_agent, run_agent
 from app.worker.tasks.jobs import ingest_job
 from app.worker.tasks.matching import score_match
 from app.worker.tasks.ping import ping
@@ -11,6 +11,7 @@ __all__ = [
     "ingest_job",
     "parse_resume",
     "ping",
+    "resume_agent",
     "run_agent",
     "score_match",
 ]

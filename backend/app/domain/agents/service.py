@@ -28,6 +28,7 @@ from app.models.ai import AgentStep, AiAction, AiSession, Message
 
 class AgentService:
     RUN_JOB = "run_agent"
+    RESUME_JOB = "resume_agent"
 
     # A query is "job-shaped" when it reads like a search over roles. Phase 7a
     # does not route on it -- it is recorded in ``run_config["job_shaped"]`` so a
@@ -162,6 +163,29 @@ class AgentService:
         if session.run_id:
             session.run_config = {**(session.run_config or {}), "stop": True}
             await self._session.flush()
+
+    async def mark_awaiting_approval(self, session_id: uuid.UUID) -> None:
+        """The run paused at a human_approval interrupt -- status only, no ended_at."""
+        session = await self._session.get(AiSession, session_id)
+        if session is None:
+            raise NotFoundError("Session not found")
+        session.status = "awaiting_approval"
+        await self._session.flush()
+
+    async def resume_run(
+        self, user_id: uuid.UUID, session_id: uuid.UUID, *, decision: str, note: str | None
+    ) -> str:
+        session = await self.get_session(user_id, session_id)
+        if session.status != "awaiting_approval" or not session.run_id:
+            raise ValidationAppError("This session has no pending approval to resume.")
+        run_id = session.run_id
+        session.status = "running"
+        await self._session.flush()
+        await enqueue(
+            self.RESUME_JOB, run_id, decision, note,
+            _defer_by=1.0, _job_id=f"resume_agent:{run_id}",
+        )
+        return run_id
 
     async def finalize(
         self,
