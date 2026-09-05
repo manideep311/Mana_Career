@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     search_provider: Literal["fake", "tavily", "brave"] = "fake"
     search_api_key: SecretStr | None = None
     doc_render_enabled: bool = True
+    email_provider: str = "console"
 
     file_store: Literal["local", "s3"] = "local"
     file_store_local_dir: str = "./var/files"
