@@ -1434,3 +1434,27 @@ Run, from `frontend/`: `pnpm lint && pnpm exec tsc --noEmit && pnpm vitest run`
 Expected: all PASS, no new failures in any pre-existing suite.
 
 Then: whole-branch review (inline, per the lean review policy — all-frontend task), squash to `main`, push, watch CI, `finishing-a-development-branch`.
+
+---
+
+## Completion report
+
+**Status: shipped.** All 6 tasks executed via subagent-driven-development (fresh Sonnet implementer per task, inline controller review per task — lean policy for all-frontend work), on branch `phase-8b-resume-tailoring-frontend` off `main@76a0ad6`.
+
+**What changed:** `RunRef` gained `session_id`; new types `ClaimValidation`/`ResumeVersion`/`ResumeVersionDetail`/`FieldDelta`/`ResumeDiff`; `ResumeSuggestionBlock` carved out of `StubBlock` into the `ResponseBlock` union; `api.resumes.tailor/versions/version/diff/renderUrl` + 3 new `qk` keys; `useTailorRunEvents` (single-attempt SSE watch — see design note below); `ResumeSuggestionBlockView` registered in the block registry; `<VersionDiff>` (grouped field-level diff + claim-validation banner); `<TailorButton>` replacing the disabled "Prepare application" placeholder on Job Detail; a "Tailored versions" section on `/resume`; the `/resume/versions/[id]` diff page with a format switcher (md/html/pdf/docx via `authedStream` + blob open/download). 19 files changed, +1093/-6, 6 commits (`e8b70aa`..`63db806`), all landed via fast-forward (the task commits were already clean — no reconstruction squash needed, unlike Phases 7a/7b/8a).
+
+**Two backend fixes made during pre-flight, before any frontend task was dispatched** (both on `main` ahead of this branch, both CI-green independently):
+- `RunRefOut` gained `session_id` (commit `55fe27c`) — `POST /resumes/{id}/tailor` creates its own session per run and returned only `{run_id}`, leaving no way to build the `/ai/sessions/{id}/events` watch URL.
+- `resume_tailoring` node now honors `inputs.resume_id` instead of always picking the primary-or-first-confirmed résumé (commit `da13755`, with a DB regression test) — a real correctness bug that this phase's `TailorButton` depends on being fixed, since it always sends an explicit résumé id.
+
+**Design ruling — why `useTailorRunEvents` doesn't reconnect:** unlike `useJobEvents`/`useResumeEvents`, which reconnect on a dropped stream because the backend re-reads DB status on every fresh `open` frame, the AI run relay (`_relay` in `ai.py`) only forwards live Redis pub/sub with no replay buffer — reconnecting after a drop would hang until the relay's own 300s cap. The hook is deliberately single-attempt (matching `useAgentStream`'s existing precedent), surfacing a drop as an immediate error pointing the user at "Tailored versions".
+
+**Scope cut from the master spec's original §9 sketch** (both decided during spec-addendum authoring, before any task was planned): no `resume_suggestions` accept/edit/dismiss API — 8a never wrote rows to that table, so `ResumeSuggestionBlockView` is view-only, linking to the diff; no "Résumé Workspace 3-pane shell" — a "Tailored versions" section was added to the existing single-column `/resume` page instead. Both are recorded in the spec addendum §2 and left for a later phase if ever needed.
+
+**Process notes:** two implementer dispatch attempts for Task 2 failed immediately on a session rate limit before writing any files (discarded cleanly, re-dispatched fresh once the limit reset); Task 5 and Task 6 implementers each found and fixed a real test-infra defect in this plan's own test snippets — a `findByRole` race against a still-disabled button's first paint (Task 5, fixed with a `waitFor(...).toBeEnabled()` poll) and a `container.toBeEmptyDOMElement()` assertion that can never pass because `<Toaster>` always mounts a Radix notifications region (Task 6, fixed by asserting on the component's own output instead). Both fixes were test-only, verified correct by inline review, no production code affected.
+
+**Regression check:** full frontend suite green throughout — 135 → 140 → 145 → 148 → 151 tests across the six tasks, 47 files, zero pre-existing test broken. `pnpm lint` and `tsc --noEmit` clean at every step and on final `main`.
+
+**CI:** [run 33940595292](https://github.com/manideep311/Mana_Career/actions/runs/33940595292) — frontend/backend/eval all green.
+
+**Not verified here (flagged, not addressed):** the render endpoint's actual `pdf`/`docx` output was never exercised end-to-end against a real `xhtml2pdf`/`python-docx` render (backend renders are DB/CI-gated and this phase is frontend-only) — only the frontend's handling of a successful blob response and a 409 was tested with mocks. Persisting rendered files to `FileStore`, `resume_chunks` retrieval, and the accept/edit/dismiss workflow all remain out of scope per the spec addendum.
