@@ -22,9 +22,15 @@ async def test_application_prep_halts_with_letter_but_no_email():
 
 
 async def test_human_approval_routes_approve_to_email_external_action(monkeypatch):
+    import importlib
     from unittest.mock import AsyncMock
 
-    import app.domain.agents.nodes.human_approval as mod
+    # importlib.import_module (not `import ... as mod`) -- nodes/__init__.py's
+    # `from app.domain.agents.nodes.human_approval import human_approval` rebinds
+    # the `nodes` package's own `human_approval` attribute to the function, so a
+    # plain dotted import-as would resolve `mod` to that function, not the
+    # submodule. import_module reads straight from sys.modules and sidesteps it.
+    mod = importlib.import_module("app.domain.agents.nodes.human_approval")
 
     deps = AsyncMock()
     deps.session.get = AsyncMock(return_value=None)
@@ -43,9 +49,10 @@ async def test_human_approval_routes_approve_to_email_external_action(monkeypatc
 
 
 async def test_human_approval_routes_reject_to_halted(monkeypatch):
+    import importlib
     from unittest.mock import AsyncMock
 
-    import app.domain.agents.nodes.human_approval as mod
+    mod = importlib.import_module("app.domain.agents.nodes.human_approval")
 
     deps = AsyncMock()
     deps.session.get = AsyncMock(return_value=None)

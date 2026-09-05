@@ -28,6 +28,7 @@ from app.domain.agents.graph import AgentDeps, build_graph
 from app.domain.agents.search.factory import get_search_provider
 from app.domain.agents.service import AgentService
 from app.domain.agents.state import ManaState
+from app.domain.email.factory import get_email_sender
 from app.domain.embeddings.factory import get_embeddings_provider
 from app.domain.llm.factory import get_llm_provider
 from app.models.ai import AiSession
@@ -86,6 +87,7 @@ async def run_agent(ctx: dict[str, Any], run_id: str) -> dict[str, Any]:
                 checkpointer=await get_checkpointer(settings),
                 publish=publish,
                 svc=svc,
+                email_sender=get_email_sender(settings),
                 user_id=s.user_id,
                 run_id=run_id,
                 session_id=s.id,

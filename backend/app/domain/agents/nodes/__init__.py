@@ -1,7 +1,10 @@
+from app.domain.agents.nodes.application_prep import application_prep
 from app.domain.agents.nodes.claim_validator import claim_validator
 from app.domain.agents.nodes.cover_letter import cover_letter
 from app.domain.agents.nodes.email_draft import email_draft
+from app.domain.agents.nodes.email_external_action import email_external_action
 from app.domain.agents.nodes.halted import halted
+from app.domain.agents.nodes.human_approval import human_approval
 from app.domain.agents.nodes.job_research import job_research
 from app.domain.agents.nodes.job_retrieval import job_retrieval
 from app.domain.agents.nodes.letter_claim_validator import letter_claim_validator
@@ -13,10 +16,13 @@ from app.domain.agents.nodes.skill_gap import skill_gap
 from app.domain.agents.nodes.supervisor import supervisor
 
 __all__ = [
+    "application_prep",
     "claim_validator",
     "cover_letter",
     "email_draft",
+    "email_external_action",
     "halted",
+    "human_approval",
     "job_research",
     "job_retrieval",
     "letter_claim_validator",

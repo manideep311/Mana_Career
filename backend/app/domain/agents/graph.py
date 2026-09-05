@@ -1,14 +1,14 @@
 """``graph.py`` -- assemble the Mana Career LangGraph ``StateGraph``.
 
 ``AgentDeps`` is the per-run bag of collaborators every node closes over;
-``build_graph`` registers the thirteen nodes, wires the supervisor fan-out and
+``build_graph`` registers the sixteen nodes, wires the supervisor fan-out and
 the linear ``understand_job`` and ``tailor_resume`` chains, and compiles
 against the run's checkpointer.
 
-The supervisor and halted nodes are wired **raw** (they never raise and only
-emit routing / terminal keys); the eleven worker nodes are wrapped in
-:func:`app.domain.agents.budget.guard` so stop requests and budget breaches
-become terminal state.
+The supervisor, halted, and human_approval nodes are wired **raw** (they
+never raise and only emit routing / terminal keys); the twelve worker nodes
+are wrapped in :func:`app.domain.agents.budget.guard` so stop requests and
+budget breaches become terminal state.
 """
 
 from __future__ import annotations
@@ -23,10 +23,13 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.agents.budget import guard
+from app.domain.agents.nodes.application_prep import application_prep
 from app.domain.agents.nodes.claim_validator import claim_validator
 from app.domain.agents.nodes.cover_letter import cover_letter
 from app.domain.agents.nodes.email_draft import email_draft
+from app.domain.agents.nodes.email_external_action import email_external_action
 from app.domain.agents.nodes.halted import halted
+from app.domain.agents.nodes.human_approval import human_approval
 from app.domain.agents.nodes.job_research import job_research
 from app.domain.agents.nodes.job_retrieval import job_retrieval
 from app.domain.agents.nodes.letter_claim_validator import letter_claim_validator
@@ -39,6 +42,7 @@ from app.domain.agents.nodes.supervisor import supervisor
 from app.domain.agents.search.provider import SearchProvider
 from app.domain.agents.service import AgentService
 from app.domain.agents.state import ManaState
+from app.domain.email.sender import EmailSender
 from app.domain.embeddings.provider import EmbeddingsProvider
 from app.domain.llm.provider import LLMProvider
 
@@ -52,12 +56,17 @@ class AgentDeps:
     checkpointer: Any
     publish: Callable[[dict[str, Any]], Awaitable[None]]
     svc: AgentService
+    email_sender: EmailSender
     user_id: uuid.UUID
     run_id: str
     session_id: uuid.UUID
 
 
 def _route_from_supervisor(state: ManaState) -> str:
+    return state.get("_route", "halted")
+
+
+def _route_from_human_approval(state: ManaState) -> str:
     return state.get("_route", "halted")
 
 
@@ -85,12 +94,15 @@ def build_graph(deps: AgentDeps) -> Any:
         ("cover_letter", cover_letter),
         ("letter_claim_validator", letter_claim_validator),
         ("email_draft", email_draft),
+        ("application_prep", application_prep),
+        ("email_external_action", email_external_action),
         ("respond", respond),
     ]:
         # guard() returns a precisely-typed Callable[[ManaState], Awaitable[...]];
         # langgraph's add_node overloads only bind NodeInputT off a partial/Runnable.
         g.add_node(name, guard(name, partial(fn, deps=deps)))  # type: ignore[call-overload]
     g.add_node("halted", partial(halted, deps=deps))
+    g.add_node("human_approval", partial(human_approval, deps=deps))
     g.set_entry_point("supervisor")
     g.add_conditional_edges(
         "supervisor",
@@ -149,6 +161,21 @@ def build_graph(deps: AgentDeps) -> Any:
     )
     g.add_conditional_edges(
         "email_draft",
+        _halt_or("application_prep"),
+        {"application_prep": "application_prep", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "application_prep",
+        _halt_or("human_approval"),
+        {"human_approval": "human_approval", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "human_approval",
+        _route_from_human_approval,
+        {"email_external_action": "email_external_action", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "email_external_action",
         _halt_or("respond"),
         {"respond": "respond", "halted": "halted"},
     )

@@ -59,9 +59,7 @@ async def email_external_action(state: ManaState, *, deps: "AgentDeps") -> dict[
             "_summary": "This application changed after you reviewed it — please try again",
         }
 
-    # AgentDeps.email_sender is added by Task 7's graph wiring (not yet landed on
-    # this branch as of Task 6) -- remove this ignore once that field exists.
-    result = await deps.email_sender.send(  # type: ignore[attr-defined]
+    result = await deps.email_sender.send(
         EmailMessage(
             to_email=email.to_email or "", to_name=email.to_name,
             subject=email.subject, body=email.body, body_format=email.body_format,

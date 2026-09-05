@@ -62,7 +62,10 @@ async def respond(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
     n = len(match_refs)
 
     blocks: list[BaseModel]
-    if state.get("email_draft_id"):
+    if state.get("application_id") and state.get("status") == "completed":
+        text = "Your application was sent — nice work!"
+        blocks = [TextBlock(markdown=text)]
+    elif state.get("email_draft_id"):
         text = (
             "Your cover letter and application email are ready — take a look "
             "before you send anything."
