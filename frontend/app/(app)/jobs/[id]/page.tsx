@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorState } from "@/components/common/ErrorState";
 import { fmtSalary } from "@/components/jobs/JobCard";
 import { WhyThisMatch } from "@/components/jobs/WhyThisMatch";
+import { TailorButton } from "@/components/resume/TailorButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -157,10 +158,7 @@ export default function JobDetailPage() {
 
       <WhyThisMatch jobId={id} />
 
-      {/* Phase 8: Prepare Application */}
-      <Button disabled title="Coming in a later release">
-        Prepare application
-      </Button>
+      <TailorButton jobId={id} />
 
       <div className="flex flex-col gap-6">
         {job.description ? (
