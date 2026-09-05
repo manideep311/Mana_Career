@@ -17,6 +17,7 @@ import { ExtractionReview } from "@/components/resume/ExtractionReview";
 import { ResumeFailed } from "@/components/resume/ResumeFailed";
 import { ResumeList } from "@/components/resume/ResumeList";
 import { ResumeStepper } from "@/components/resume/ResumeStepper";
+import { ResumeVersionsList } from "@/components/resume/ResumeVersionsList";
 import { UploadDropzone } from "@/components/resume/UploadDropzone";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
@@ -401,6 +402,11 @@ export default function ResumePage() {
             }}
             busyId={busyId}
           />
+          {(() => {
+            const confirmed = resumes.filter((r) => r.confirmed_at != null);
+            const target = confirmed.find((r) => r.is_primary) ?? confirmed[0];
+            return target ? <ResumeVersionsList resumeId={target.id} /> : null;
+          })()}
           <div ref={uploadAnotherRef} className="flex flex-col gap-2">
             <h2 className="text-sm font-medium text-text">
               Upload another résumé
