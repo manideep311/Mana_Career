@@ -1,12 +1,12 @@
 """``graph.py`` -- assemble the Mana Career LangGraph ``StateGraph``.
 
 ``AgentDeps`` is the per-run bag of collaborators every node closes over;
-``build_graph`` registers the ten nodes, wires the supervisor fan-out and the
-linear ``understand_job`` and ``tailor_resume`` chains, and compiles against
-the run's checkpointer.
+``build_graph`` registers the thirteen nodes, wires the supervisor fan-out and
+the linear ``understand_job`` and ``tailor_resume`` chains, and compiles
+against the run's checkpointer.
 
 The supervisor and halted nodes are wired **raw** (they never raise and only
-emit routing / terminal keys); the eight worker nodes are wrapped in
+emit routing / terminal keys); the eleven worker nodes are wrapped in
 :func:`app.domain.agents.budget.guard` so stop requests and budget breaches
 become terminal state.
 """
@@ -24,9 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.agents.budget import guard
 from app.domain.agents.nodes.claim_validator import claim_validator
+from app.domain.agents.nodes.cover_letter import cover_letter
+from app.domain.agents.nodes.email_draft import email_draft
 from app.domain.agents.nodes.halted import halted
 from app.domain.agents.nodes.job_research import job_research
 from app.domain.agents.nodes.job_retrieval import job_retrieval
+from app.domain.agents.nodes.letter_claim_validator import letter_claim_validator
 from app.domain.agents.nodes.match_analysis import match_analysis
 from app.domain.agents.nodes.recommendation import recommendation
 from app.domain.agents.nodes.respond import respond
@@ -62,6 +65,12 @@ def _halt_or(next_node: str) -> Callable[[ManaState], str]:
     return lambda s: "halted" if s.get("status") in {"halted", "error"} else next_node
 
 
+def _after_resume_claim_check(state: ManaState) -> str:
+    if state.get("status") in {"halted", "error"}:
+        return "halted"
+    return "cover_letter" if state.get("goal") == "prepare_application" else "respond"
+
+
 def build_graph(deps: AgentDeps) -> Any:
     g = StateGraph(ManaState)
     g.add_node("supervisor", partial(supervisor, deps=deps))
@@ -73,6 +82,9 @@ def build_graph(deps: AgentDeps) -> Any:
         ("recommendation", recommendation),
         ("resume_tailoring", resume_tailoring),
         ("claim_validator", claim_validator),
+        ("cover_letter", cover_letter),
+        ("letter_claim_validator", letter_claim_validator),
+        ("email_draft", email_draft),
         ("respond", respond),
     ]:
         # guard() returns a precisely-typed Callable[[ManaState], Awaitable[...]];
@@ -122,6 +134,21 @@ def build_graph(deps: AgentDeps) -> Any:
     )
     g.add_conditional_edges(
         "claim_validator",
+        _after_resume_claim_check,
+        {"cover_letter": "cover_letter", "respond": "respond", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "cover_letter",
+        _halt_or("letter_claim_validator"),
+        {"letter_claim_validator": "letter_claim_validator", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "letter_claim_validator",
+        _halt_or("email_draft"),
+        {"email_draft": "email_draft", "halted": "halted"},
+    )
+    g.add_conditional_edges(
+        "email_draft",
         _halt_or("respond"),
         {"respond": "respond", "halted": "halted"},
     )

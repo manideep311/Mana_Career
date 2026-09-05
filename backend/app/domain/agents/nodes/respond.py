@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from app.domain.agents.blocks import (
+    ApplicationDraftBlock,
     InsufficientInfoBlock,
     JobCardBlock,
     ResumeSuggestionBlock,
@@ -61,7 +62,24 @@ async def respond(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
     n = len(match_refs)
 
     blocks: list[BaseModel]
-    if state.get("tailored_resume_version_id"):
+    if state.get("email_draft_id"):
+        text = (
+            "Your cover letter and application email are ready — take a look "
+            "before you send anything."
+        )
+        blocks = [
+            TextBlock(markdown=text),
+            ApplicationDraftBlock(
+                resume_version_id=uuid.UUID(state["tailored_resume_version_id"])
+                if state.get("tailored_resume_version_id")
+                else None,
+                cover_letter_id=uuid.UUID(state["cover_letter_id"])
+                if state.get("cover_letter_id")
+                else None,
+                email_draft_id=uuid.UUID(state["email_draft_id"]),
+            ),
+        ]
+    elif state.get("tailored_resume_version_id"):
         text = (
             "Here's a version of your résumé tuned for this role — open it to "
             "see what changed."
