@@ -56,3 +56,18 @@ async def test_human_approval_routes_reject_to_halted(monkeypatch):
     )
     assert out["status"] == "rejected"
     assert out["_route"] == "halted"
+
+
+async def test_email_external_action_halts_when_not_approved():
+    from unittest.mock import AsyncMock
+
+    from app.domain.agents.nodes.email_external_action import email_external_action
+
+    deps = AsyncMock()
+    approval = AsyncMock(status="pending")
+    deps.session.get = AsyncMock(return_value=approval)
+
+    out = await email_external_action(
+        {"approval_request_id": "11111111-1111-1111-1111-111111111111"}, deps=deps
+    )
+    assert out["status"] == "halted"
