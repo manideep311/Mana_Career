@@ -19,6 +19,9 @@ NODE_ORDER: tuple[str, ...] = (
     "cover_letter",
     "letter_claim_validator",
     "email_draft",
+    "application_prep",
+    "human_approval",
+    "email_external_action",
     "respond",
 )
 
@@ -61,12 +64,15 @@ class ManaState(TypedDict, total=False):
     cover_letter_id: str | None
     email_draft_id: str | None
     application_id: str | None
+    approval_request_id: str | None
     approval: dict[str, Any] | None
     revise_count: int
     budget: Budget
     tool_cache: dict[str, Any]
     step_log: Annotated[list[StepEvent], operator.add]
     stop_requested: bool
-    status: Literal["running", "completed", "rejected", "halted", "error"]
+    status: Literal[
+        "running", "awaiting_approval", "completed", "rejected", "halted", "error"
+    ]
     error: str | None
     _route: str

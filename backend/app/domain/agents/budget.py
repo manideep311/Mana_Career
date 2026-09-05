@@ -4,6 +4,8 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
+from langgraph.errors import GraphBubbleUp
+
 from app.domain.agents.state import Budget, StepEvent
 
 if TYPE_CHECKING:
@@ -106,6 +108,13 @@ def guard(node_name: str, fn: NodeFn) -> NodeFn:
 
         try:
             partial = await fn(state)
+        except GraphBubbleUp:
+            # LangGraph's own control-flow exceptions (interrupt(), etc.) must
+            # propagate untouched -- see the Phase 10a spec R2. No node this
+            # phase raises this from inside a guard()-wrapped node (human_approval
+            # is registered raw specifically to avoid needing this), but the
+            # fix belongs here defensively for any future one that does.
+            raise
         except Exception as exc:
             failed: StepEvent = {
                 "step_index": len(state.get("step_log", [])),
