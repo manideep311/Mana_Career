@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.domain.agents.state import ManaState
 from app.domain.resume.extractor import ResumeExtraction
-from app.domain.resume.tailoring import ClaimValidator, _collect_sources
+from app.domain.resume.tailoring import ClaimValidator, _collect_sources, _resume_claim_lines
 from app.domain.resume.version_service import TailoringService
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ async def claim_validator(state: ManaState, *, deps: "AgentDeps") -> dict[str, A
     )
     tailored = ResumeExtraction.model_validate(version.content)
     sources = _collect_sources(tailored, "")
-    report = ClaimValidator(sources).check(tailored)
+    report = ClaimValidator(sources).check(_resume_claim_lines(tailored))
 
     if report.passed:
         summary = f"All {report.checked} claims grounded"

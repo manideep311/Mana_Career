@@ -7,6 +7,7 @@ from app.domain.resume.extractor import (
 from app.domain.resume.tailoring import (
     ClaimValidator,
     _collect_sources,
+    _resume_claim_lines,
     tailor_resume,
 )
 
@@ -33,7 +34,7 @@ def _base() -> ResumeExtraction:
 def test_validator_passes_when_highlights_are_grounded():
     b = _base()
     v = ClaimValidator(_collect_sources(b, ""))
-    report = v.check(b)  # the base is trivially grounded in itself
+    report = v.check(_resume_claim_lines(b))  # the base is trivially grounded in itself
     assert report.passed is True
     assert report.unsupported == []
 
@@ -45,7 +46,7 @@ def test_validator_flags_an_invented_highlight():
     tailored.experiences[0].highlights.append(
         "Led a team of 50 engineers across four continents"
     )
-    report = v.check(tailored)
+    report = v.check(_resume_claim_lines(tailored))
     assert report.passed is False
     assert any("Led a team of 50" in u for u in report.unsupported)
 
@@ -55,7 +56,7 @@ def test_validator_ignores_blank_and_structural_lines():
     v = ClaimValidator(_collect_sources(b, ""))
     tailored = b.model_copy(deep=True)
     tailored.experiences[0].highlights.append("   ")
-    report = v.check(tailored)
+    report = v.check(_resume_claim_lines(tailored))
     assert report.passed is True
 
 

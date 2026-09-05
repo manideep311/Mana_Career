@@ -57,6 +57,21 @@ def _split_sentences(text: str) -> list[str]:
     return [s for s in _SENTENCE_SPLIT_RE.split(text.strip()) if s.strip()]
 
 
+def _resume_claim_lines(tailored: ResumeExtraction) -> list[str]:
+    claim_lines: list[str] = []
+    for exp in tailored.experiences:
+        claim_lines.extend(exp.highlights)
+        if exp.description and exp.description.strip():
+            claim_lines.extend(_split_sentences(exp.description))
+    for proj in tailored.projects:
+        claim_lines.extend(proj.highlights)
+        if proj.description and proj.description.strip():
+            claim_lines.extend(_split_sentences(proj.description))
+    if tailored.summary and tailored.summary.strip():
+        claim_lines.extend(_split_sentences(tailored.summary))
+    return claim_lines
+
+
 class ClaimValidator:
     def __init__(self, sources: list[str]) -> None:
         self._source_tokens = [self._norm(s) for s in sources if s.strip()]
@@ -77,19 +92,7 @@ class ClaimValidator:
         )
         return best >= _MIN_SUPPORT
 
-    def check(self, tailored: ResumeExtraction) -> ClaimReport:
-        claim_lines: list[str] = []
-        for exp in tailored.experiences:
-            claim_lines.extend(exp.highlights)
-            if exp.description and exp.description.strip():
-                claim_lines.extend(_split_sentences(exp.description))
-        for proj in tailored.projects:
-            claim_lines.extend(proj.highlights)
-            if proj.description and proj.description.strip():
-                claim_lines.extend(_split_sentences(proj.description))
-        if tailored.summary and tailored.summary.strip():
-            claim_lines.extend(_split_sentences(tailored.summary))
-
+    def check(self, claim_lines: list[str]) -> ClaimReport:
         checked = 0
         unsupported: list[str] = []
         for line in claim_lines:
@@ -178,7 +181,7 @@ async def tailor_resume(
             max_tokens=1600,
         )
         tailored = ResumeExtraction.model_validate(res.structured)
-        report = validator.check(tailored)
+        report = validator.check(_resume_claim_lines(tailored))
         meta = replace(res.meta, claim_validation=report.as_dict())
         if report.passed or attempt == MAX_CLAIM_REPROMPTS:
             return tailored, meta
