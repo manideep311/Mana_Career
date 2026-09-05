@@ -19,3 +19,40 @@ async def test_application_prep_halts_with_letter_but_no_email():
         deps=object(),
     )
     assert out["status"] == "halted"
+
+
+async def test_human_approval_routes_approve_to_email_external_action(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import app.domain.agents.nodes.human_approval as mod
+
+    deps = AsyncMock()
+    deps.session.get = AsyncMock(return_value=None)
+
+    # human_approval calls interrupt(), which raises GraphInterrupt when not
+    # running inside a real graph invocation with a resume value queued.
+    # Test the routing logic directly instead, bypassing interrupt(): this is
+    # the same "test the pure decision logic, not the LangGraph plumbing"
+    # split already used elsewhere (e.g. claim_validator's node vs its
+    # ClaimValidator primitive). Patch interrupt() to return a canned value.
+    monkeypatch.setattr(mod, "interrupt", lambda payload: {"decision": "approve"})
+    out = await mod.human_approval(
+        {"approval_request_id": "11111111-1111-1111-1111-111111111111"}, deps=deps
+    )
+    assert out["_route"] == "email_external_action"
+
+
+async def test_human_approval_routes_reject_to_halted(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import app.domain.agents.nodes.human_approval as mod
+
+    deps = AsyncMock()
+    deps.session.get = AsyncMock(return_value=None)
+
+    monkeypatch.setattr(mod, "interrupt", lambda payload: {"decision": "reject"})
+    out = await mod.human_approval(
+        {"approval_request_id": "11111111-1111-1111-1111-111111111111"}, deps=deps
+    )
+    assert out["status"] == "rejected"
+    assert out["_route"] == "halted"
