@@ -50,7 +50,10 @@ class ResumeSuggestionBlock(BaseModel):
 
 class ApplicationDraftBlock(BaseModel):
     kind: Literal["application_draft"] = "application_draft"
-    application_id: uuid.UUID
+    application_id: uuid.UUID | None = None
+    resume_version_id: uuid.UUID | None = None
+    cover_letter_id: uuid.UUID | None = None
+    email_draft_id: uuid.UUID | None = None
 
 
 class ApprovalActionBlock(BaseModel):

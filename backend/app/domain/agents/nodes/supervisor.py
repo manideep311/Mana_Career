@@ -17,6 +17,8 @@ async def supervisor(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:
     goal = state["goal"]
     if goal == "tailor_resume":
         return {"_route": "resume_tailoring", "_summary": "Routing: tailor a résumé"}
+    if goal == "prepare_application":
+        return {"_route": "resume_tailoring", "_summary": "Routing: prepare an application"}
     if goal == "understand_job":
         return {"_route": "job_retrieval", "_summary": "Routing: understand a job"}
     if goal == "enrich_job":

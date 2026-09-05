@@ -11,7 +11,7 @@ async def test_supervisor_routes_understand_job():
 
 
 async def test_supervisor_halts_unsupported_goals():
-    out = await supervisor({"goal": "prepare_application", "inputs": {}}, deps=_Deps())
+    out = await supervisor({"goal": "analyze_profile", "inputs": {}}, deps=_Deps())
     assert out["status"] == "halted" and out["_route"] == "halted"
 
 

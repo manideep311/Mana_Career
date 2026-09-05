@@ -16,6 +16,9 @@ NODE_ORDER: tuple[str, ...] = (
     "recommendation",
     "resume_tailoring",
     "claim_validator",
+    "cover_letter",
+    "letter_claim_validator",
+    "email_draft",
     "respond",
 )
 
