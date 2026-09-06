@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
 from app.core.errors import NotFoundError, ValidationAppError
+from app.models.ai import AiAction
 from app.models.application import Application
 from app.models.application_event import ApplicationEvent
 
@@ -21,6 +24,26 @@ _PIPELINE_RANK = case(
     value=Application.status,
     else_=99,
 )
+
+
+@dataclass(frozen=True)
+class TimelineItem:
+    kind: str
+    at: datetime
+    title: str
+    detail: dict[str, Any]
+
+
+def _event_title(e: ApplicationEvent) -> str:
+    if e.kind == "status_change":
+        return f"Moved to {e.to_status}"
+    if e.kind == "note":
+        return "Note added"
+    if e.kind == "interview_scheduled":
+        return "Interview scheduled"
+    if e.kind == "email_sent":
+        return "Application email sent"
+    return e.body or "Mana AI action"
 
 
 class ApplicationService:
@@ -128,3 +151,50 @@ class ApplicationService:
         app_row = await self.get(user_id, application_id)
         app_row.deleted_at = datetime.now(UTC)
         await self._session.flush()
+
+    async def timeline(
+        self, user_id: uuid.UUID, application_id: uuid.UUID
+    ) -> list[TimelineItem]:
+        app_row = await self.get(user_id, application_id)
+
+        events = (
+            await self._session.execute(
+                select(ApplicationEvent)
+                .where(ApplicationEvent.application_id == application_id)
+                .order_by(ApplicationEvent.occurred_at.desc())
+            )
+        ).scalars().all()
+
+        items: list[TimelineItem] = []
+        for e in events:
+            detail = {
+                k: v
+                for k, v in {
+                    "from": e.from_status, "to": e.to_status, "body": e.body,
+                    **(e.meta or {}),
+                }.items()
+                if v is not None
+            }
+            items.append(
+                TimelineItem(kind=e.kind, at=e.occurred_at, title=_event_title(e), detail=detail)
+            )
+
+        if app_row.ai_session_id is not None:
+            actions = (
+                await self._session.execute(
+                    select(AiAction).where(
+                        AiAction.user_id == user_id,
+                        AiAction.ai_session_id == app_row.ai_session_id,
+                    )
+                )
+            ).scalars().all()
+            for a in actions:
+                items.append(
+                    TimelineItem(
+                        kind="ai_action", at=a.occurred_at, title=a.summary,
+                        detail=dict(a.detail or {}),
+                    )
+                )
+
+        items.sort(key=lambda it: it.at, reverse=True)
+        return items

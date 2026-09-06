@@ -87,3 +87,17 @@ async def test_list_status_sort_runs(db_session):
     u, a = await _seed(db_session, "svc-sort@x.com")
     rows, total = await ApplicationService(db_session).list_(u.id, sort="status")
     assert total == 1 and rows[0].id == a.id
+
+
+async def test_timeline_merges_events_newest_first(db_session):
+    u, a = await _seed(db_session, "svc-timeline@x.com")
+    svc = ApplicationService(db_session)
+    await svc.patch(u.id, a.id, status="applied")
+    await svc.add_note(u.id, a.id, "Recruiter replied")
+
+    items = await svc.timeline(u.id, a.id)
+    kinds = [it.kind for it in items]
+    assert "status_change" in kinds and "note" in kinds
+    # newest first
+    ats = [it.at for it in items]
+    assert ats == sorted(ats, reverse=True)
