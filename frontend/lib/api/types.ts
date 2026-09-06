@@ -372,3 +372,55 @@ export interface RunRef {
   run_id: string;
   session_id: string;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Applications + human approval (Phase 10)                                   */
+/* -------------------------------------------------------------------------- */
+
+export interface Application {
+  id: string;
+  job_id: string;
+  resume_version_id: string | null;
+  cover_letter_id: string | null;
+  application_email_id: string | null;
+  status: string;
+  match_score: string | null;
+  source: string;
+  applied_at: string | null;
+  last_status_change_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApprovalPayloadSnapshot {
+  job: { title: string; company: string };
+  resume_version_id: string | null;
+  cover_letter: { id: string; content: string };
+  email: {
+    id: string;
+    to_email: string | null;
+    to_name: string | null;
+    subject: string;
+    body: string;
+  };
+}
+
+export interface ApprovalRequest {
+  id: string;
+  application_id: string;
+  action_type: string;
+  payload_snapshot: ApprovalPayloadSnapshot;
+  status: string;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+}
+
+export interface ApprovalRequestList {
+  items: ApprovalRequest[];
+}
+
+export interface ApprovalDecision {
+  decision: "approve" | "reject";
+  note?: string;
+}

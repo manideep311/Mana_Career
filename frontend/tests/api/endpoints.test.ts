@@ -276,3 +276,45 @@ describe("resume tailoring", () => {
     expect(f).not.toHaveBeenCalled();
   });
 });
+
+describe("applications + approvals", () => {
+  it("applications.create POSTs { job_id } to /applications", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.create({ job_id: "j1" });
+    expect(calls[0].path).toBe("/api/v1/applications");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ job_id: "j1" });
+  });
+
+  it("applications.get GETs /applications/{id}", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.get("a1");
+    expect(calls[0].path).toBe("/api/v1/applications/a1");
+  });
+
+  it("approvals.list GETs /approvals with no query by default", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).approvals.list();
+    expect(calls[0].path).toBe("/api/v1/approvals");
+  });
+
+  it("approvals.list GETs /approvals?status=pending when given", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).approvals.list("pending");
+    expect(calls[0].path).toBe("/api/v1/approvals?status=pending");
+  });
+
+  it("approvals.get GETs /approvals/{id}", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).approvals.get("ap1");
+    expect(calls[0].path).toBe("/api/v1/approvals/ap1");
+  });
+
+  it("approvals.decide POSTs the decision to /approvals/{id}", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).approvals.decide("ap1", { decision: "approve" });
+    expect(calls[0].path).toBe("/api/v1/approvals/ap1");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ decision: "approve" });
+  });
+});

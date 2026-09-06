@@ -5,6 +5,10 @@ import {
   AiActionList,
   AiSession,
   AiSessionList,
+  Application,
+  ApprovalDecision,
+  ApprovalRequest,
+  ApprovalRequestList,
   AuthResponse,
   CareerProfile,
   EvalResult,
@@ -168,6 +172,26 @@ export function makeApi(f: Fetcher) {
       },
       renderUrl(versionId: string, fmt: "md" | "html" | "pdf" | "docx") {
         return `/api/v1/resumes/versions/${versionId}/render?fmt=${fmt}`;
+      },
+    },
+    applications: {
+      async create(body: { job_id: string }) {
+        return f<RunRef>("/api/v1/applications", json("POST", body));
+      },
+      async get(id: string) {
+        return f<Application>(`/api/v1/applications/${id}`);
+      },
+    },
+    approvals: {
+      async list(status?: string) {
+        const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+        return f<ApprovalRequestList>(`/api/v1/approvals${qs}`);
+      },
+      async get(id: string) {
+        return f<ApprovalRequest>(`/api/v1/approvals/${id}`);
+      },
+      async decide(id: string, body: ApprovalDecision) {
+        return f<void>(`/api/v1/approvals/${id}`, json("POST", body));
       },
     },
     jobs: {

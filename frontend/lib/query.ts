@@ -28,6 +28,9 @@ export const qk = {
   resumeVersion: (id: string) => ["resume-version", id] as const,
   resumeDiff: (id: string, against?: string) =>
     ["resume-version", id, "diff", against ?? null] as const,
+  application: (id: string) => ["application", id] as const,
+  approval: (id: string) => ["approval", id] as const,
+  approvals: (status?: string) => ["approvals", status ?? null] as const,
   jobs: ["jobs"] as const,
   jobsList: (q: Record<string, unknown>) => ["jobs", "list", q] as const,
   job: (id: string) => ["jobs", id] as const,
