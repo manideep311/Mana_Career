@@ -900,3 +900,45 @@ git commit -m "test(applications): tracker routes -- save/list/patch/timeline/no
 ## Task 7: verification + whole-branch review + completion report + squash + push + CI
 
 Controller-only. Mirror the Phase 8a/9/10a closeout: full local gate, run every pure suite added/modified (skip DB-gated files), whole-branch review (inline except the two subagent-reviewed tasks), write the completion report into this plan file with directly-verified baseline counts (isolated worktree), squash/fast-forward to `main`, push, watch CI (the `backend` job's DB suite is the real proof — watch for a `case()` construct error against real Postgres and for the migration `0014` applying cleanly), `finishing-a-development-branch`.
+
+---
+
+## Completion report (2026-09-06)
+
+**Status: shipped.** All 7 tasks complete on `phase-11a-application-tracker-backend`, fast-forwarded to `main`.
+
+### Commits (fast-forward, per-task commits already clean — no squash)
+
+| SHA | Task | Summary |
+|---|---|---|
+| `8847479` | 1 | `application_events` table — migration `0014` + append-only model (`Base` only, `created_at` + `occurred_at`, no trigger; mirrors `audit_logs`) |
+| `f9eb6b3` | 2 | `ApplicationService` — `list_` / `get` / `patch` / `add_note` / `soft_delete`; status change writes an `application_events` row + an `audit_logs` row (`application.status_change`) + `last_status_change_at`, and `applied_at` on first move to `applied` |
+| `57d81a3` | 3 | `ApplicationService.timeline()` — merges `application_events` + `ai_actions` (only when `ai_session_id` set) into one newest-first `list[TimelineItem]` |
+| `e834318` | 4 | schemas + `POST /applications` intent union (`prepare`→202 `RunRefOut` \| `save`→201 `ApplicationOut`, `save` writes a `status_change` event + `application.saved` audit) + `GET` list (`?status=&sort=&limit=&offset=`) + `PATCH` + `DELETE` (soft) |
+| `cdb6ef5` | 5 | `POST /applications/{id}/notes` (201 `TimelineItemOut`) + `GET /applications/{id}/timeline` (`ApplicationTimelineOut`) |
+| `12216be` | 6 | DB-gated API integration suite `tests/api/test_applications_tracker.py` (save/list/patch/timeline/note/delete round-trips) |
+
+### Verification
+
+- Baseline `51fbd99` (fork point), directly measured in the working tree: **159 mypy source files**, **414 tests collected**.
+- Branch HEAD `12216be`: **162 mypy source files** (+3: `models/application_event.py`, `domain/applications/__init__.py`, `domain/applications/service.py`), **425 tests collected** (+11: 1 model round-trip, 7 `ApplicationService`, 3 API tracker).
+- Local gate on HEAD: `ruff` clean · `mypy app` clean (162 files) · `lint-imports` **3 kept, 0 broken** (new `app.domain.applications` leaf imports only `app.core.*` / `app.models.*`) · `pytest --collect-only` 425, 0 errors.
+- **DB-gated tests (11 new) run in CI only** — no local Postgres. Alembic chain single head `0014_application_events`.
+
+### Rulings
+
+- **R-T2-review** — Task 2 (`ApplicationService`) got a subagent review though the plan left it untagged: it is the phase's core status-change audit-trail logic and is DB-gated (no local test signal). Verdict: spec PASS, quality APPROVE, zero defects.
+- **R-T4-review** — Task 4 (routes/schemas) reviewed inline rather than as a subagent "API wiring" review: it is a controller-authored full-file replacement pre-verified against `jobs.py` / `test_approvals.py`, and Task 6's subagent review independently exercises the whole HTTP surface. No double-coverage.
+- **Whole-branch review: inline** (project lean-review convention). PASS — no integration issues. Checked: `_application_out` is the sole `ApplicationOut` constructor (2 new required fields safe); Phase 10a `test_applications.py` still green (no exact-body assertions; `POST` with no `intent` still 202); new response fields are additive/back-compat for the Phase 10b frontend; save-branch `db.commit()` matches the existing prepare-branch pattern; mutations flush-only via the request session like sibling domains; FastAPI route paths unambiguous.
+
+### Deviations from plan (all gate-forced, behavior-neutral)
+
+1. Task 2 test: `rows2, total2 = ...` → `_, total2 = ...` (ruff `RUF059`, matches repo throwaway-unpack convention).
+2. Task 4: the 3 Task-5-only schema imports (`ApplicationNoteIn`, `ApplicationTimelineOut`, `TimelineItemOut`) were NOT added in Task 4 — ruff `F401` rejects unused imports even transiently. Task 5's brief was amended to add them (plus `TimelineItem`) when the routes that use them land.
+3. Task 6 test: two 118-char `a1`/`a2` lines wrapped into the brief's own multiline `client.post(...)` form (ruff `E501`).
+4. Task 5 was committed by the controller after its implementer agent died on a network error post-write, pre-commit — the uncommitted diff was verified verbatim-to-brief and the full gate re-run green before committing.
+5. Infra (not a code change): a prior task rebuilt a broken `.venv` (its Python 3.12 interpreter had been removed from the system) from the unchanged `uv.lock`; `uv.lock` and all tracked files untouched, CI unaffected (builds its own env).
+
+### Deferred to Phase 11b (frontend)
+
+Kanban board `/applications`, detail page `/applications/[id]`, drag-and-drop status change with optimistic UI, timeline view, the "Applications" nav entry. Also still out of scope: a dedicated `interview_scheduled` endpoint, cursor pagination.
