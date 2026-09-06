@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -10,7 +11,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { fmtSalary } from "@/components/jobs/JobCard";
 import { WhyThisMatch } from "@/components/jobs/WhyThisMatch";
 import { TailorButton } from "@/components/resume/TailorButton";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
@@ -159,6 +160,10 @@ export default function JobDetailPage() {
       <WhyThisMatch jobId={id} />
 
       <TailorButton jobId={id} />
+
+      <Link href={`/applications/new/${id}`} className={buttonVariants({ variant: "default" })}>
+        Prepare application
+      </Link>
 
       <div className="flex flex-col gap-6">
         {job.description ? (
