@@ -58,16 +58,12 @@ async def test_list_approvals_filters_by_status(client, db_session):
     assert approval.id not in {uuid.UUID(item["id"]) for item in r.json()["items"]}
 
 
-async def test_decide_approval_rejects_a_second_decision(client, db_session, monkeypatch):
-    # AgentService.resume_run enqueues a real ARQ job over Redis; this test
-    # only exercises the ApprovalRequest state machine and the route's own
-    # ownership + idempotency checks, so patch the enqueue call to a no-op --
-    # find and reuse whatever monkeypatch target the codebase's own
-    # AgentService/enqueue tests already use for this (e.g. patching
-    # `app.core.queue.enqueue` or `app.domain.agents.service.enqueue`) rather
-    # than guessing a new one here.
-    monkeypatch.setattr("app.domain.agents.service.enqueue", lambda *a, **k: None)
-
+async def test_decide_approval_rejects_a_second_decision(client, db_session):
+    # `AgentService.start_run` / `resume_run` both `await enqueue(...)` a real
+    # ARQ job; conftest's autouse `_no_enqueue` fixture already patches
+    # `app.domain.agents.service.enqueue` to an async no-op, so this test only
+    # has to exercise the ApprovalRequest state machine + the route's ownership
+    # and idempotency checks -- no re-patch needed here.
     h = await _auth(client, "approval-decide@x.com")
     user = (
         await db_session.execute(select(User).where(User.email == "approval-decide@x.com"))
