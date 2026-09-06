@@ -6,6 +6,9 @@ import {
   AiSession,
   AiSessionList,
   Application,
+  ApplicationListResponse,
+  ApplicationStatus,
+  ApplicationTimeline,
   ApprovalDecision,
   ApprovalRequest,
   ApprovalRequestList,
@@ -38,6 +41,7 @@ import {
   SkillGap,
   SkillGapStatus,
   Strength,
+  TimelineItem,
   UserOut,
 } from "@/lib/api/types";
 import { Fetcher } from "@/lib/api/fetcher";
@@ -178,8 +182,39 @@ export function makeApi(f: Fetcher) {
       async create(body: { job_id: string }) {
         return f<RunRef>("/api/v1/applications", json("POST", body));
       },
+      async save(job_id: string) {
+        return f<Application>(
+          "/api/v1/applications",
+          json("POST", { job_id, intent: "save" }),
+        );
+      },
       async get(id: string) {
         return f<Application>(`/api/v1/applications/${id}`);
+      },
+      async list(
+        params: { status?: string; sort?: string; limit?: number; offset?: number } = {},
+      ) {
+        const qs = new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined && v !== "")
+            .map(([k, v]) => [k, String(v)]),
+        ).toString();
+        return f<ApplicationListResponse>(`/api/v1/applications${qs ? `?${qs}` : ""}`);
+      },
+      async patch(id: string, body: { status?: ApplicationStatus; notes?: string }) {
+        return f<Application>(`/api/v1/applications/${id}`, json("PATCH", body));
+      },
+      async remove(id: string) {
+        return f<void>(`/api/v1/applications/${id}`, { method: "DELETE" });
+      },
+      async addNote(id: string, body: string) {
+        return f<TimelineItem>(
+          `/api/v1/applications/${id}/notes`,
+          json("POST", { body }),
+        );
+      },
+      async timeline(id: string) {
+        return f<ApplicationTimeline>(`/api/v1/applications/${id}/timeline`);
       },
     },
     approvals: {

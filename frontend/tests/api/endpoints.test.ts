@@ -292,6 +292,57 @@ describe("applications + approvals", () => {
     expect(calls[0].path).toBe("/api/v1/applications/a1");
   });
 
+  it("save posts intent=save", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.save("job-1");
+    expect(calls[0].path).toBe("/api/v1/applications");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      job_id: "job-1",
+      intent: "save",
+    });
+  });
+
+  it("list builds a status query string", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.list({ status: "interview", limit: 100 });
+    expect(calls[0].path).toBe("/api/v1/applications?status=interview&limit=100");
+  });
+
+  it("list with no params hits the bare path", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.list();
+    expect(calls[0].path).toBe("/api/v1/applications");
+  });
+
+  it("patch PATCHes status", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.patch("a-1", { status: "applied" });
+    expect(calls[0].path).toBe("/api/v1/applications/a-1");
+    expect(calls[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ status: "applied" });
+  });
+
+  it("addNote posts the body", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.addNote("a-1", "called recruiter");
+    expect(calls[0].path).toBe("/api/v1/applications/a-1/notes");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ body: "called recruiter" });
+  });
+
+  it("timeline GETs the timeline path", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.timeline("a-1");
+    expect(calls[0].path).toBe("/api/v1/applications/a-1/timeline");
+  });
+
+  it("remove DELETEs", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).applications.remove("a-1");
+    expect(calls[0].path).toBe("/api/v1/applications/a-1");
+    expect(calls[0].init?.method).toBe("DELETE");
+  });
+
   it("approvals.list GETs /approvals with no query by default", async () => {
     const { f, calls } = recordingFetcher();
     await makeApi(f).approvals.list();

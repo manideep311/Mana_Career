@@ -386,10 +386,33 @@ export interface Application {
   status: string;
   match_score: string | null;
   source: string;
+  notes: string | null;
+  ai_session_id: string | null;
   applied_at: string | null;
   last_status_change_at: string;
   created_at: string;
   updated_at: string;
+}
+
+export type ApplicationStatus =
+  | "saved" | "applied" | "interview" | "offer" | "rejected" | "withdrawn";
+
+export interface ApplicationListResponse {
+  items: Application[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TimelineItem {
+  kind: string;
+  at: string;
+  title: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ApplicationTimeline {
+  items: TimelineItem[];
 }
 
 export interface ApprovalPayloadSnapshot {

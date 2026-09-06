@@ -29,6 +29,9 @@ export const qk = {
   resumeDiff: (id: string, against?: string) =>
     ["resume-version", id, "diff", against ?? null] as const,
   application: (id: string) => ["application", id] as const,
+  applications: (params?: Record<string, unknown>) =>
+    ["applications", "list", params ?? {}] as const,
+  applicationTimeline: (id: string) => ["application", id, "timeline"] as const,
   approval: (id: string) => ["approval", id] as const,
   approvals: (status?: string) => ["approvals", status ?? null] as const,
   jobs: ["jobs"] as const,
