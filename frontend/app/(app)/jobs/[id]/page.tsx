@@ -69,6 +69,16 @@ export default function JobDetailPage() {
       toast({ title: "Couldn't remove that job.", variant: "danger" }),
   });
 
+  const saveToTracker = useMutation({
+    mutationFn: () => api.applications.save(id),
+    onSuccess: () => {
+      toast({ title: "Saved to your tracker." });
+      router.push("/applications");
+    },
+    onError: () =>
+      toast({ title: "Couldn't save that to your tracker.", variant: "danger" }),
+  });
+
   if (jobQuery.isPending) {
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -164,6 +174,14 @@ export default function JobDetailPage() {
       <Link href={`/applications/new/${id}`} className={buttonVariants({ variant: "default" })}>
         Prepare application
       </Link>
+
+      <Button
+        variant="outline"
+        loading={saveToTracker.isPending}
+        onClick={() => saveToTracker.mutate()}
+      >
+        Save to tracker
+      </Button>
 
       <div className="flex flex-col gap-6">
         {job.description ? (
