@@ -9,12 +9,15 @@ from app.api.v1.schemas.ai import RunRefOut
 from app.api.v1.schemas.applications import (
     ApplicationCreateIn,
     ApplicationListOut,
+    ApplicationNoteIn,
     ApplicationOut,
     ApplicationPatchIn,
+    ApplicationTimelineOut,
+    TimelineItemOut,
 )
 from app.core.audit import audit
 from app.domain.agents.service import AgentService
-from app.domain.applications.service import ApplicationService
+from app.domain.applications.service import ApplicationService, TimelineItem
 from app.models.application import Application
 from app.models.application_event import ApplicationEvent
 
@@ -106,3 +109,29 @@ async def delete_application(
     application_id: uuid.UUID, db: DbDep, user: CurrentUser
 ) -> None:
     await ApplicationService(db).soft_delete(user.id, application_id)
+
+
+def _timeline_item_out(it: TimelineItem) -> TimelineItemOut:
+    return TimelineItemOut(kind=it.kind, at=it.at, title=it.title, detail=it.detail)
+
+
+def _note_event_out(ev: ApplicationEvent) -> TimelineItemOut:
+    return TimelineItemOut(
+        kind="note", at=ev.occurred_at, title="Note added", detail={"body": ev.body or ""},
+    )
+
+
+@router.post("/{application_id}/notes", status_code=status.HTTP_201_CREATED)
+async def add_application_note(
+    application_id: uuid.UUID, body: ApplicationNoteIn, db: DbDep, user: CurrentUser
+) -> TimelineItemOut:
+    ev = await ApplicationService(db).add_note(user.id, application_id, body.body)
+    return _note_event_out(ev)
+
+
+@router.get("/{application_id}/timeline")
+async def get_application_timeline(
+    application_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> ApplicationTimelineOut:
+    items = await ApplicationService(db).timeline(user.id, application_id)
+    return ApplicationTimelineOut(items=[_timeline_item_out(it) for it in items])
