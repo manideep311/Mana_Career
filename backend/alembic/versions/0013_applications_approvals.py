@@ -28,7 +28,10 @@ def upgrade() -> None:
         sa.Column("resume_version_id", pg.UUID(as_uuid=True)),
         sa.Column("cover_letter_id", pg.UUID(as_uuid=True)),
         sa.Column("application_email_id", pg.UUID(as_uuid=True)),
-        sa.Column("status", sa.String(16), nullable=False,
+        # String(20): 'awaiting_approval' is 17 chars (also why ai_sessions.status
+        # is String(20)). approval_requests.status below stays String(16) -- its
+        # longest value 'superseded' is 10.
+        sa.Column("status", sa.String(20), nullable=False,
                   server_default=sa.text("'preparing'")),
         sa.Column("match_score", sa.Numeric(5, 2)),
         sa.Column("source", sa.String(16), nullable=False,
@@ -95,8 +98,15 @@ def upgrade() -> None:
     op.execute("CREATE TRIGGER trg_approval_requests_set_updated_at BEFORE UPDATE ON "
                "approval_requests FOR EACH ROW EXECUTE FUNCTION set_updated_at()")
 
+    # application_emails.status (migration 0012) was String(16), but its CHECK
+    # allows 'awaiting_approval' (17 chars) -- Phase 10a's email_external_action
+    # is the first code path that ever writes a value that long. Widen it here
+    # rather than in a separate 0014.
+    op.alter_column("application_emails", "status", type_=sa.String(20))
+
 
 def downgrade() -> None:
+    op.alter_column("application_emails", "status", type_=sa.String(16))
     op.execute("DROP TRIGGER IF EXISTS trg_approval_requests_set_updated_at "
                "ON approval_requests")
     op.drop_table("approval_requests")

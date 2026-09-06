@@ -105,7 +105,7 @@ class ApplicationEmail(Base, TimestampMixin):
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
     status: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default=text("'draft'")
+        String(20), nullable=False, server_default=text("'draft'")
     )
     provider: Mapped[str | None] = mapped_column(String(16))
     provider_message_id: Mapped[str | None] = mapped_column(String(200))
@@ -144,7 +144,7 @@ class Application(Base, TimestampMixin):
     cover_letter_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     application_email_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     status: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default=text("'preparing'")
+        String(20), nullable=False, server_default=text("'preparing'")
     )
     match_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     source: Mapped[str] = mapped_column(
