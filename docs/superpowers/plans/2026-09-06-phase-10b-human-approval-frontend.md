@@ -929,3 +929,19 @@ From `frontend/`: `pnpm lint && pnpm exec tsc --noEmit && pnpm vitest run`
 Expected: all PASS, no new failures in any pre-existing suite.
 
 Then: whole-branch review (inline — all-frontend), squash/fast-forward to `main`, push, watch CI, `finishing-a-development-branch`.
+
+---
+
+## Completion report
+
+**Status: shipped.** 5 tasks via subagent-driven-development (fresh Sonnet implementer per task, inline controller review for all — lean policy, all-frontend), on branch `phase-10b-human-approval-frontend` off `main@c3b9fcb`, fast-forwarded (5 clean task commits, `ad43865`..`b83b23d`).
+
+**What changed:** the "Prepare application" flow. `Application`/`ApprovalRequest`/`ApprovalPayloadSnapshot`/`ApprovalDecision` types + `api.applications.create/get` + `api.approvals.list/get/decide` + `qk.application/approval/approvals`. `usePrepareRunEvents` — `useTailorRunEvents` plus an `approval`-frame branch (`status: "awaiting_approval"`, `approvalId`) and a `done`-handler that won't clobber an already-set pause. `<ApprovalCard>` — the exact preview (role, company, full cover letter, email to/subject/body) with the mandated line "Nothing will be sent until you approve it." `<PrepareApplicationBuilder>` — start (`POST /applications`) → SSE step-progress checklist → on the `approval` frame, `GET /approvals/{id}` → `<ApprovalCard>` → `POST /approvals/{id}` → **poll** `GET /applications/{id}` (`refetchInterval` while `status === "awaiting_approval"`) → "Application sent at HH:MM" / "you didn't approve this" / error-with-start-over. A new `applications/new/[jobId]` route hosts it; Job Detail gets a "Prepare application" link-button after `<TailorButton>`. 13 files, +760/-1.
+
+**Key rulings (spec R1-R7):** dedicated hook (not a shared one — repo convention); the post-approval "sending" phase **polls** `GET /applications/{id}` rather than re-watching the no-replay SSE channel (a race in the ~1s `_defer_by` window); the Builder learns `application_id` from `GET /approvals/{id}` (the `approval` SSE frame carries only `{approval_id}`); no block rendering (`respond` emits a block only on the completed path, never during the pause); the Builder is its own `applications/new/[jobId]` route (the master's `applications/[id]/prepare` can't be the entry — no id yet); reject and error are terminal on the page (no revise loop — backend `reject` is terminal from Phase 10a).
+
+**Regression check:** `pnpm lint` + `pnpm exec tsc --noEmit` clean at every task boundary and on final `main`. Frontend test count: 151 (baseline at `c3b9fcb`, verified in a worktree) → 166 (branch tip), across 47 → 51 files. No pre-existing suite broken (the `job-detail-page` suite still green after the new `<Link>`).
+
+**CI:** pending — watched to green as part of this closeout.
+
+**Not verified here:** the full run→pause→approve→send round trip end to end against a live backend (each piece is unit-tested with mocked `api` + a scripted SSE stream; the real integration is proven by Phase 10a's DB-gated `test_resume_agent.py` on the backend side). Everything Phase 11 owns (the Kanban tracker, `applications` list/detail/timeline/notes) remains untouched.
