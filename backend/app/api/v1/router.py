@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai,
     applications,
+    approvals,
     auth,
     eval,
     health,
@@ -24,3 +25,4 @@ api_router.include_router(profile.router)
 api_router.include_router(resumes.router)
 api_router.include_router(skill_gaps.router)
 api_router.include_router(applications.router)
+api_router.include_router(approvals.router)
