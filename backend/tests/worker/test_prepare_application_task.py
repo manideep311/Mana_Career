@@ -1,5 +1,14 @@
-"""run_agent preparing a full application (résumé -> letter -> email) --
-DB integration, CI-deferred."""
+"""run_agent driving the prepare_application chain up to the human_approval
+pause -- DB integration, CI-deferred.
+
+Phase 9 wrote this chain ending at ``respond`` (``status="completed"``);
+Phase 10a wired ``application_prep -> human_approval -> email_external_action``
+in, so the chain now assembles every artifact (tailored résumé, cover
+letter, drafted email, Application + pending ApprovalRequest) and then
+PAUSES at the interrupt. The pause-then-resume-then-send flow proper is
+covered by ``tests/worker/test_resume_agent.py``; this test just asserts
+the assembly + the pause.
+"""
 from __future__ import annotations
 
 import contextlib
@@ -8,8 +17,13 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.domain.agents.service import AgentService
-from app.models.ai import AgentStep, AiAction, AiSession, Message
-from app.models.application import ApplicationEmail, CoverLetter
+from app.models.ai import AgentStep, AiAction, AiSession
+from app.models.application import (
+    Application,
+    ApplicationEmail,
+    ApprovalRequest,
+    CoverLetter,
+)
 from app.models.job import Job
 from app.models.resume import Resume
 from app.models.resume_version import ResumeVersion
@@ -49,7 +63,9 @@ async def _seed(db_session, email):
     return u, r, j
 
 
-async def test_run_agent_prepares_a_full_application(db_session, monkeypatch, fake_redis):
+async def test_run_agent_assembles_the_application_then_pauses(
+    db_session, monkeypatch, fake_redis
+):
     monkeypatch.setattr("app.worker.tasks.agent._session_for", lambda: _ctx(db_session))
     monkeypatch.setattr("app.worker.tasks.agent.Redis", _fake_redis_cls(fake_redis))
 
@@ -62,7 +78,7 @@ async def test_run_agent_prepares_a_full_application(db_session, monkeypatch, fa
     )
 
     out = await run_agent({}, run_id)
-    assert out == {"run_id": run_id, "status": "completed"}
+    assert out == {"run_id": run_id, "status": "awaiting_approval"}
 
     version = (
         await db_session.execute(
@@ -86,29 +102,39 @@ async def test_run_agent_prepares_a_full_application(db_session, monkeypatch, fa
     ).scalar_one()
     assert email.status == "draft"
 
-    msg = (
+    application = (
+        await db_session.execute(select(Application).where(Application.job_id == job.id))
+    ).scalar_one()
+    assert application.status == "awaiting_approval"
+    assert application.cover_letter_id == letter.id
+    assert application.application_email_id == email.id
+
+    approval = (
         await db_session.execute(
-            select(Message).where(Message.ai_session_id == sess.id, Message.role == "assistant")
+            select(ApprovalRequest).where(ApprovalRequest.application_id == application.id)
         )
     ).scalar_one()
-    assert "application_draft" in [b["kind"] for b in msg.blocks]
+    assert approval.status == "pending"
+    assert approval.run_id == run_id
+    assert approval.payload_hash
 
     steps = (
         await db_session.execute(select(AgentStep).where(AgentStep.run_id == run_id))
     ).scalars().all()
     assert {
         "resume_tailoring", "claim_validator", "cover_letter",
-        "letter_claim_validator", "email_draft",
+        "letter_claim_validator", "email_draft", "application_prep",
     } <= {st.node for st in steps}
 
     actions = (
         await db_session.execute(select(AiAction).where(AiAction.run_id == run_id))
     ).scalars().all()
     assert {a.action_key for a in actions} >= {
-        "tailored_resume", "wrote_cover_letter", "drafted_email",
+        "tailored_resume", "wrote_cover_letter", "drafted_email", "prepared_application",
     }
 
     session_row = (
         await db_session.execute(select(AiSession).where(AiSession.run_id == run_id))
     ).scalar_one()
-    assert session_row.status == "completed"
+    assert session_row.status == "awaiting_approval"
+    assert session_row.ended_at is None  # paused, not finalized

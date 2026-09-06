@@ -64,7 +64,7 @@ async def _session_for() -> AsyncIterator[AsyncSession]:
 
 async def _drive(
     *, session: AsyncSession, s: AiSession, run_id: str, graph_input: Any,
-    settings: Any, redis: Redis, publish: Any,
+    settings: Any, publish: Any,
 ) -> dict[str, Any]:
     svc = AgentService(session, settings=settings)
     deps = AgentDeps(
@@ -153,7 +153,7 @@ async def _run_or_resume(
             graph_input = graph_input_factory(s)
             return await _drive(
                 session=session, s=s, run_id=run_id, graph_input=graph_input,
-                settings=settings, redis=redis, publish=publish,
+                settings=settings, publish=publish,
             )
         except Exception as exc:
             await session.rollback()

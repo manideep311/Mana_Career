@@ -92,7 +92,10 @@ async def email_external_action(state: ManaState, *, deps: "AgentDeps") -> dict[
         run_id=deps.run_id,
         node="email_external_action",
         action_key="sent_application_email",
-        summary=f"Application sent at {now.strftime('%-I:%M %p')}",
+        # `%-I` (strip the leading zero from the 12-hour hour) is glibc-only;
+        # `.lstrip("0")` is the portable equivalent -- 12-hour format never
+        # yields "00", so it only ever drops a genuine leading zero.
+        summary=f"Application sent at {now.strftime('%I:%M %p').lstrip('0')}",
         entity_type="application",
         entity_id=application.id,
     )
