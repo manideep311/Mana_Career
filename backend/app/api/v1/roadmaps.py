@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, status
 from sqlalchemy import select
+from sse_starlette import EventSourceResponse, ServerSentEvent
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import CurrentUser, DbDep, RedisDep
+from app.api.v1.schemas.learning import LearningResourceOut
 from app.api.v1.schemas.roadmaps import (
     MilestoneOut,
     MilestonePatchIn,
@@ -16,9 +19,17 @@ from app.api.v1.schemas.roadmaps import (
     RoadmapPatchIn,
     RoadmapRefOut,
 )
+from app.core.db import AsyncSessionLocal
+from app.core.errors import NotFoundError
+from app.core.events import roadmap_channel, sse_event, status_stream
+from app.domain.roadmap.planner import _milestone_payload
 from app.domain.roadmap.service import RoadmapService
 from app.models.job import Job
-from app.models.learning import LearningRecommendation, RoadmapMilestone
+from app.models.learning import (
+    LearningRecommendation,
+    LearningResource,
+    RoadmapMilestone,
+)
 
 router = APIRouter(prefix="/roadmaps", tags=["roadmaps"])
 
@@ -81,6 +92,44 @@ async def get_roadmap(
     )
 
 
+@router.get("/{roadmap_id}/events")
+async def roadmap_events(
+    roadmap_id: uuid.UUID, user: CurrentUser, redis: RedisDep
+) -> EventSourceResponse:
+    # Ownership check in a short-lived session (404s non-owners before streaming);
+    # the request session is NOT held open for the life of the stream.
+    async with AsyncSessionLocal() as session:
+        await RoadmapService(session).get(user.id, roadmap_id)
+    channel = roadmap_channel(str(roadmap_id))
+
+    async def _gen() -> AsyncIterator[ServerSentEvent]:
+        async for payload in status_stream(
+            redis, channel, terminal={"active", "archived"}
+        ):
+            if payload.get("event") == "open":
+                # Replay whatever the planner has already written so a late
+                # subscriber still gets the full picture.
+                async with AsyncSessionLocal() as s:
+                    svc = RoadmapService(s)
+                    try:
+                        rec = await svc.get(user.id, roadmap_id)
+                    except NotFoundError:
+                        return  # deleted mid-stream -- close cleanly
+                    for m in await svc.milestones(roadmap_id):
+                        yield sse_event(
+                            {"event": "milestone", "milestone": _milestone_payload(m)}
+                        )
+                    if rec.status in {"active", "archived"}:
+                        yield sse_event(
+                            {"event": "done", "status": rec.status, "id": str(roadmap_id)}
+                        )
+                        return
+                continue
+            yield sse_event(payload)
+
+    return EventSourceResponse(_gen())
+
+
 @router.patch("/{roadmap_id}")
 async def patch_roadmap(
     roadmap_id: uuid.UUID, body: RoadmapPatchIn, db: DbDep, user: CurrentUser
@@ -100,3 +149,32 @@ async def patch_milestone(
             user.id, roadmap_id, milestone_id, body.status
         )
     )
+
+
+lr_router = APIRouter(prefix="/learning-resources", tags=["learning-resources"])
+
+
+@lr_router.get("")
+async def list_learning_resources(
+    db: DbDep, user: CurrentUser, skills: str | None = None, level: str | None = None
+) -> list[LearningResourceOut]:
+    stmt = select(LearningResource).where(LearningResource.is_active.is_(True))
+    slugs = [s for s in (skills or "").split(",") if s]
+    if slugs:
+        # Generic ``ARRAY`` has no ``.overlap`` comparator; ``&&`` is the PG
+        # array-overlap operator and SQLAlchemy binds the RHS as ``::TEXT[]``.
+        stmt = stmt.where(LearningResource.skills.op("&&")(slugs))
+    if level is not None:
+        stmt = stmt.where(LearningResource.level == level)
+    stmt = stmt.order_by(
+        LearningResource.level, LearningResource.est_hours.nulls_last()
+    ).limit(50)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        LearningResourceOut(
+            id=r.id, title=r.title, provider=r.provider, url=r.url, type=r.type,
+            skills=list(r.skills), level=r.level, est_hours=r.est_hours, cost=r.cost,
+            summary=r.summary,
+        )
+        for r in rows
+    ]

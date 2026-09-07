@@ -7,6 +7,8 @@ patch that closes the matching aggregate skill-gap row. Also checks the
 """
 from __future__ import annotations
 
+import contextlib
+
 from sqlalchemy import select
 
 from app.models.learning import (
@@ -91,6 +93,31 @@ async def _seed_roadmap(db_session, email):
     return user, rec, milestone, gap
 
 
+@contextlib.asynccontextmanager
+async def _pinned_session(session):
+    """Seam for ``AsyncSessionLocal`` -- hand the route's short-lived session
+    blocks the rolled-back test session so they see rows seeded in it."""
+    yield session
+
+
+async def _seed_learning_resources(db_session):
+    sql_res = LearningResource(
+        title="SQL Fundamentals", provider="Mode", type="course",
+        url="https://example.com/roadmaps-api-test-lr-sql", skills=["sql"],
+        level="beginner", cost="free",
+        summary="Query relational data with confidence.", is_active=True,
+    )
+    rust_res = LearningResource(
+        title="Rust in Anger", provider="No Starch", type="book",
+        url="https://example.com/roadmaps-api-test-lr-rust", skills=["rust"],
+        level="advanced", cost="paid",
+        summary="Systems programming without the footguns.", is_active=True,
+    )
+    db_session.add_all([sql_res, rust_res])
+    await db_session.commit()
+    return sql_res, rust_res
+
+
 async def test_create_roadmap_returns_202_with_id(client, db_session):
     h = await _auth(client, "roadmap-create@x.com")
     r = await client.post("/api/v1/roadmaps", headers=h, json={})
@@ -148,3 +175,51 @@ async def test_patch_roadmap_rejects_bad_status(client, db_session):
         f"/api/v1/roadmaps/{rec.id}", headers=h, json={"status": "planning"}
     )
     assert r.status_code == 422
+
+
+async def test_roadmap_events_streams_for_owner_and_404s_non_owner(
+    client, db_session, monkeypatch
+):
+    email = "roadmap-events@x.com"
+    h = await _auth(client, email)
+    _user, rec, _milestone, _gap = await _seed_roadmap(db_session, email)
+
+    # Pin the route's short-lived sessions to the rolled-back test session and
+    # swap the unbounded Redis relay for a single ``open`` frame so the buffering
+    # ASGI test transport can drain the body (see ``sse-tests-asgitransport-buffers``).
+    async def _open_only(_redis, _channel, *, terminal):
+        yield {"event": "open"}
+
+    monkeypatch.setattr(
+        "app.api.v1.roadmaps.AsyncSessionLocal", lambda: _pinned_session(db_session)
+    )
+    monkeypatch.setattr("app.api.v1.roadmaps.status_stream", _open_only)
+
+    r = await client.get(f"/api/v1/roadmaps/{rec.id}/events", headers=h)
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers["content-type"]
+    # the ``open`` frame drives the replay: milestone(s) then a terminal ``done``
+    # because the seeded roadmap is already ``active``.
+    assert "event: milestone" in r.text
+    assert "event: done" in r.text
+
+    other = await _auth(client, "roadmap-events-other@x.com")
+    r2 = await client.get(f"/api/v1/roadmaps/{rec.id}/events", headers=other)
+    assert r2.status_code == 404
+
+
+async def test_learning_resources_filter_by_skills_and_level(client, db_session):
+    h = await _auth(client, "learning-resources@x.com")
+    await _seed_learning_resources(db_session)
+
+    by_skill = await client.get(
+        "/api/v1/learning-resources", headers=h, params={"skills": "sql"}
+    )
+    assert by_skill.status_code == 200
+    assert {row["title"] for row in by_skill.json()} == {"SQL Fundamentals"}
+
+    by_level = await client.get(
+        "/api/v1/learning-resources", headers=h, params={"level": "beginner"}
+    )
+    assert by_level.status_code == 200
+    assert {row["title"] for row in by_level.json()} == {"SQL Fundamentals"}
