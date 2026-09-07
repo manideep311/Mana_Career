@@ -73,6 +73,7 @@ export default function JobDetailPage() {
     mutationFn: () => api.applications.save(id),
     onSuccess: () => {
       toast({ title: "Saved to your tracker." });
+      void queryClient.invalidateQueries({ queryKey: qk.applications() });
       router.push("/applications");
     },
     onError: () =>
