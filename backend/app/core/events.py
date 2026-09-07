@@ -17,6 +17,10 @@ def job_channel(job_id: str) -> str:
     return f"sse:job:{job_id}"
 
 
+def roadmap_channel(rec_id: str) -> str:
+    return f"sse:roadmap:{rec_id}"
+
+
 async def publish_status(
     redis: Redis,
     channel: str,

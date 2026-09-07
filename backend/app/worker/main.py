@@ -14,6 +14,7 @@ from app.worker.tasks import (
     ingest_job,
     parse_resume,
     ping,
+    plan_roadmap,
     resume_agent,
     run_agent,
     score_match,
@@ -50,6 +51,7 @@ class WorkerSettings:
         score_match,
         run_agent,
         resume_agent,
+        plan_roadmap,
     ]
     redis_settings = _redis_settings()
     on_startup = _on_startup
