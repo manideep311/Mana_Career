@@ -39,6 +39,14 @@ async def list_skill_gaps(
     return [_gap_out(g) for g in rows]
 
 
+@router.post("/aggregate")
+async def rebuild_aggregate_skill_gaps(
+    db: DbDep, user: CurrentUser
+) -> list[SkillGapOut]:
+    rows = await MatchService(db).aggregate_skill_gaps(user.id)
+    return [_gap_out(g) for g in sorted(rows, key=lambda g: (-g.frequency, g.skill_label))]
+
+
 @router.patch("/{gap_id}")
 async def patch_skill_gap(
     gap_id: uuid.UUID, body: SkillGapPatchIn, db: DbDep, user: CurrentUser

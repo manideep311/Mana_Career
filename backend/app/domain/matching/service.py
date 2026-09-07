@@ -373,8 +373,54 @@ class MatchService:
         )
         if job_match_id is not None:
             stmt = stmt.where(SkillGap.job_match_id == job_match_id)
-        stmt = stmt.order_by(_severity_rank, SkillGap.skill_label)
+        if scope == "aggregate":
+            stmt = stmt.order_by(_severity_rank, SkillGap.frequency.desc())
+        else:
+            stmt = stmt.order_by(_severity_rank, SkillGap.skill_label)
         return list((await self.session.execute(stmt)).scalars().all())
+
+    async def aggregate_skill_gaps(self, user_id: uuid.UUID) -> list[SkillGap]:
+        """Roll every job-scoped gap into one ``scope='aggregate'`` row per skill.
+
+        Deterministic, no LLM. Delete-then-insert so re-running is idempotent.
+        """
+        await self.session.execute(
+            delete(SkillGap).where(
+                SkillGap.user_id == user_id, SkillGap.scope == "aggregate"
+            )
+        )
+        rows = (
+            await self.session.execute(
+                select(SkillGap).where(
+                    SkillGap.user_id == user_id, SkillGap.scope == "job"
+                )
+            )
+        ).scalars().all()
+
+        slugs: dict[uuid.UUID, tuple[str, str]] = {}
+        sev: dict[uuid.UUID, str] = {}
+        matches: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for g in rows:
+            slugs.setdefault(g.skill_id, (g.skill_slug, g.skill_label))
+            cur = sev.get(g.skill_id)
+            if cur is None or _SEVERITY_ORDER[g.severity] < _SEVERITY_ORDER[cur]:
+                sev[g.skill_id] = g.severity
+            if g.job_match_id is not None:
+                matches.setdefault(g.skill_id, set()).add(g.job_match_id)
+
+        made: list[SkillGap] = []
+        for skill_id, (slug, label) in slugs.items():
+            freq = max(1, len(matches.get(skill_id, set())))
+            row = SkillGap(
+                user_id=user_id, scope="aggregate", job_match_id=None, skill_id=skill_id,
+                skill_slug=slug, skill_label=label, severity=sev[skill_id],
+                frequency=freq, rationale=f"Missing in {freq} of your job matches.",
+                status="open",
+            )
+            self.session.add(row)
+            made.append(row)
+        await self.session.flush()
+        return made
 
     async def set_gap_status(
         self, user_id: uuid.UUID, gap_id: uuid.UUID, status: str
