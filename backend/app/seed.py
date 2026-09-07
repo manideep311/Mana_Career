@@ -281,6 +281,58 @@ async def seed_jobs(session: AsyncSession | None = None) -> int:
     return len(entries)
 
 
+async def load_learning_resources() -> list[dict[str, Any]]:
+    path = Path(__file__).parent / "domain" / "roadmap" / "learning_resources.json"
+    return json.loads(path.read_text("utf-8"))
+
+
+async def seed_learning_resources(session: AsyncSession | None = None) -> int:
+    """Seed ``learning_resources`` from the hand-authored catalog.
+
+    Upserts on ``url``; embeds ``"{title}. {summary} Skills: {slugs}"``. Same
+    ``session=None`` dual-path shape as :func:`seed_skills`.
+    """
+    from app.models.learning import LearningResource
+
+    entries = await load_learning_resources()
+    settings = get_settings()
+    provider = get_embeddings_provider(settings)
+
+    async def _run(s: AsyncSession) -> None:
+        for e in entries:
+            skills = list(e.get("skills", []))
+            embed_text = f"{e['title']}. {e['summary']} Skills: {', '.join(skills)}"
+            vec = await provider.embed_query(embed_text)
+            stmt = (
+                insert(LearningResource)
+                .values(
+                    title=e["title"], provider=e["provider"], url=e["url"], type=e["type"],
+                    skills=skills, level=e["level"], est_hours=e.get("est_hours"),
+                    cost=e["cost"], summary=e["summary"], embedding=vec, is_active=True,
+                )
+                .on_conflict_do_update(
+                    index_elements=["url"],
+                    set_={
+                        "title": e["title"], "provider": e["provider"], "type": e["type"],
+                        "skills": skills, "level": e["level"], "est_hours": e.get("est_hours"),
+                        "cost": e["cost"], "summary": e["summary"], "embedding": vec,
+                        "is_active": True,
+                    },
+                )
+            )
+            await s.execute(stmt)
+
+    if session is not None:
+        await _run(session)
+        await session.flush()
+    else:
+        async with AsyncSessionLocal() as s:
+            await _run(s)
+            await s.commit()
+
+    return len(entries)
+
+
 if __name__ == "__main__":
     target = sys.argv[1:2]
     if target == ["skills"]:
@@ -289,12 +341,15 @@ if __name__ == "__main__":
     elif target == ["jobs"]:
         n = asyncio.run(seed_jobs())
         print(f"seeded {n} jobs")
+    elif target == ["learning"]:
+        n = asyncio.run(seed_learning_resources())
+        print(f"seeded {n} learning resources")
     elif target == ["all"]:
 
-        async def _seed_all() -> tuple[int, int]:
-            return await seed_skills(), await seed_jobs()
+        async def _seed_all() -> tuple[int, int, int]:
+            return await seed_skills(), await seed_jobs(), await seed_learning_resources()
 
-        skills_n, jobs_n = asyncio.run(_seed_all())
-        print(f"seeded {skills_n} skills, {jobs_n} jobs")
+        skills_n, jobs_n, learning_n = asyncio.run(_seed_all())
+        print(f"seeded {skills_n} skills, {jobs_n} jobs, {learning_n} learning resources")
     else:
-        sys.exit("usage: python -m app.seed {skills|jobs|all}")
+        sys.exit("usage: python -m app.seed {skills|jobs|learning|all}")
