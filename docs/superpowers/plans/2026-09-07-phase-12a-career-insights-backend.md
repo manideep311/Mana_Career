@@ -657,10 +657,12 @@ Publish = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class MilestoneDraft(BaseModel):
-    why_it_matters: str = Field(min_length=1, max_length=600)
-    est_hours: int = Field(ge=1, le=200)
-    practice_project: str = Field(min_length=1, max_length=400)
-    checkpoint: str = Field(min_length=1, max_length=400)
+    # Loose bounds so the FakeLLMProvider's schema-stub (empty str / 0) validates.
+    # `_draft` enforces "is this real content?" in Python and clamps est_hours.
+    why_it_matters: str = Field(default="", max_length=600)
+    est_hours: int = Field(default=8, ge=0, le=400)
+    practice_project: str = Field(default="", max_length=400)
+    checkpoint: str = Field(default="", max_length=400)
 
 
 def _milestone_payload(m: RoadmapMilestone) -> dict[str, Any]:
@@ -804,13 +806,22 @@ class RoadmapPlanner:
             {"role": "system", "content": sys},
             {"role": "user", "content": usr},
         ]
-        result = await self._llm.complete(messages, schema=MilestoneDraft, max_tokens=700)
+        try:
+            result = await self._llm.complete(messages, schema=MilestoneDraft, max_tokens=700)
+        except Exception:  # noqa: BLE001 -- one bad milestone must not sink the roadmap
+            log.warning("roadmap_draft_llm_failed", skill=gap.skill_slug)
+            return None
         if result.structured is None:
             return None
         try:
-            return MilestoneDraft.model_validate(result.structured)
+            draft = MilestoneDraft.model_validate(result.structured)
         except Exception:  # noqa: BLE001
             return None
+        # "Is this real content?" — the FakeLLMProvider returns empty strings.
+        if not draft.why_it_matters.strip() or not draft.practice_project.strip():
+            return None
+        draft = draft.model_copy(update={"est_hours": max(1, min(draft.est_hours, 200))})
+        return draft
 ```
 **NOTES for the implementer:**
 - Verify `LearningResource.embedding.cosine_distance(...)` is the pgvector-sqlalchemy operator name against the installed version (grep the repo — `app/domain/rag/vector_store.py` shows how existing code orders by vector distance; mirror that exact call, e.g. `.l2_distance` / `.cosine_distance` / `.max_inner_product`).
@@ -976,6 +987,7 @@ import json
 import uuid
 from typing import Any
 
+from redis.asyncio import Redis
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -991,37 +1003,47 @@ log = get_logger("worker.roadmap")
 
 
 async def plan_roadmap(ctx: dict[str, Any], rec_id: str) -> None:
+    # Mirrors app/worker/tasks/agent.py::_run_or_resume — own Redis conn +
+    # aclose() in finally; ARQ's ctx does NOT carry a redis pool in this repo.
+    log.info("plan_roadmap_start", rec_id=rec_id, job_id=ctx.get("job_id"))
     settings = get_settings()
-    redis = ctx["redis"]
+    redis = Redis.from_url(settings.redis_url)
     channel = roadmap_channel(rec_id)
 
     async def publish(frame: dict[str, Any]) -> None:
-        await redis.publish(channel, json.dumps(frame))
+        await redis.publish(channel, json.dumps(frame, default=str))
 
-    async with AsyncSessionLocal() as session:
-        rec = (
-            await session.execute(
-                select(LearningRecommendation).where(
-                    LearningRecommendation.id == uuid.UUID(rec_id)
+    try:
+        async with AsyncSessionLocal() as session:
+            rec = (
+                await session.execute(
+                    select(LearningRecommendation).where(
+                        LearningRecommendation.id == uuid.UUID(rec_id)
+                    )
                 )
+            ).scalar_one_or_none()
+            if rec is None or rec.status != "planning":
+                log.info("plan_roadmap_skipped", rec_id=rec_id,
+                         reason="missing" if rec is None else rec.status)
+                return
+            planner = RoadmapPlanner(
+                session,
+                llm=get_llm_provider(settings),
+                embeddings=get_embeddings_provider(settings),
             )
-        ).scalar_one_or_none()
-        if rec is None or rec.status != "planning":
-            log.info("plan_roadmap_skipped", rec_id=rec_id,
-                     reason="missing" if rec is None else rec.status)
-            return
-        planner = RoadmapPlanner(
-            session,
-            llm=get_llm_provider(settings),
-            embeddings=get_embeddings_provider(settings),
-        )
-        await planner.plan(
-            rec.user_id, scope=rec.scope, job_id=rec.job_id,
-            constraints=dict(rec.constraints), publish=publish,
-        )
-        await session.commit()
+            try:
+                await planner.plan(
+                    rec.user_id, scope=rec.scope, job_id=rec.job_id,
+                    constraints=dict(rec.constraints), publish=publish,
+                )
+            finally:
+                # planner.plan() sets status active/archived on its own session;
+                # commit either outcome so the row + milestones persist.
+                await session.commit()
+    finally:
+        await redis.aclose()
 ```
-**NOTE for the implementer:** confirm ARQ exposes the redis pool as `ctx["redis"]` in this codebase — grep `app/worker/tasks/agent.py` for how it publishes to `sse:ai:{run_id}` and mirror that exact access (`ctx["redis"]` vs a module `get_redis()`).
+**NOTE for the implementer:** `ctx` is referenced via the opening `log.info(... job_id=ctx.get("job_id"))` line (matches `app/worker/tasks/ping.py`), so no `ARG001` issue. `from __future__ import annotations` at the top of the file.
 
 - [ ] **Step 4: wire the worker** — `app/worker/tasks/__init__.py`: add `from app.worker.tasks.roadmap import plan_roadmap` and `"plan_roadmap"` into `__all__` (keep it sorted — it goes after `parse_resume`, before `ping`... actually alphabetical: `..., "parse_resume", "ping", "plan_roadmap", "resume_agent", ...` — `ping` < `plan_roadmap` since `pi` < `pl`). `app/worker/main.py`: add `plan_roadmap` to the `from app.worker.tasks import (...)` tuple and to `WorkerSettings.functions`.
 
