@@ -7,6 +7,7 @@ from app.api.v1 import (
     auth,
     eval,
     health,
+    insights,
     jobs,
     matches,
     profile,
@@ -18,6 +19,7 @@ from app.api.v1 import (
 api_router = APIRouter()
 api_router.include_router(ai.router)
 api_router.include_router(health.router)
+api_router.include_router(insights.router)
 api_router.include_router(auth.router)
 api_router.include_router(eval.router)
 api_router.include_router(jobs.router)
