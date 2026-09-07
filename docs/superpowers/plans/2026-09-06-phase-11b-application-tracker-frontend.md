@@ -1184,3 +1184,34 @@ Controller-only. All-frontend branch → whole-branch review is **inline** (proj
 - [ ] Watch CI (`frontend` job: `pnpm lint`, `tsc`, `vitest`). Fix any red.
 - [ ] `superpowers:finishing-a-development-branch` — delete branch + SDD workspace `.superpowers/sdd/2026-09-06-phase-11b-application-tracker-frontend/`.
 - [ ] Update the `mana-career-roadmap-progress` memory: Phase 11b done; Phases 12–14 remain.
+
+---
+
+## Completion report (2026-09-07)
+
+**Status: COMPLETE.** Branch `phase-11b-application-tracker-frontend` fast-forwarded to `main`.
+
+### Commits (7, on top of the spec/plan doc `a394341`)
+| SHA | Task | |
+|---|---|---|
+| `fdacb6e` | 1 | `api.applications.{save,list,patch,remove,addNote,timeline}` + `ApplicationStatus`/`ApplicationListResponse`/`TimelineItem`/`ApplicationTimeline` types + `qk.applications`/`qk.applicationTimeline` + "Applications" nav flipped `ready: true` |
+| `b541f02` | 2 | `StatusSelect` (+`STATUS_OPTIONS`), `Timeline` (semantic-token dot map), `AddNoteForm` (RHF+zod, `FormError message=`) |
+| `0da3850` | 3 | `ApplicationCard` (match pill, `StatusSelect`, Open link), `KanbanBoard` (6 columns, `<section aria-label>` regions) |
+| `cc6da92` | 4 | `/applications` board page — `useQueries` job lookups, optimistic `move` mutation (`onMutate` write / `onError` rollback / `onSettled` `refetchType:"none"` invalidate) |
+| `0ae4edf` | 5 | `/applications/[id]` detail — header status control + remove, documents panel, optimistic note composer (plain async + try/catch/finally), merged `Timeline` |
+| `9709a20` | 6 | "Save to tracker" button on Job Detail (`api.applications.save` → toast → route to board) |
+| `76bc051` | 7 (closeout) | fix: Save-to-tracker now invalidates `qk.applications()` so a board within the 30s staleTime shows the new row |
+
+### Verification
+- **Baseline** (`a394341`, = `d402183` source): 51 test files / 166 tests.
+- **HEAD** (`76bc051`): 57 test files / 184 tests (+6 files, +18 cases: endpoints +7, status-select 1, timeline 2, kanban-board 2, applications-page 3, application-detail 2, save-to-tracker 1).
+- `pnpm lint` (`next lint`) — clean. `pnpm exec tsc --noEmit` — exit 0. `pnpm vitest run` — 57/57 files, 184/184 tests.
+- Whole-branch review: inline (all-frontend branch). One integration gap found + fixed (board refresh after save); no others. All `<Link>` targets resolve; Phase 10b `api.applications.{create,get}` preserved; `Application` type extension (`notes`, `ai_session_id`) breaks no existing fixture.
+
+### Rulings during execution
+- **R (Task 4):** `onSettled` invalidation carries `refetchType: "none"` — the `patch` response is authoritative so an immediate settle-refetch is redundant and races the optimistic frame; the query is still marked stale for the next mount/focus. `onError` rollback unchanged.
+- **R (Tasks 4/5 tests):** the optimistic-frame assertions freeze the in-flight request (or drop the settle-refetch in-test) because the static `api` mocks re-return the pre-mutation state; production paths are unaffected.
+- **R (Tasks 5/6 tests):** `@/test/utils` imported before the page-under-test so the hoisted `next/navigation` mock registers first (`useParams()` → `{}`, RULING R11) — matches `tests/jobs/job-detail-page.test.tsx` and siblings.
+
+### Deferred (noted in the 11b spec §Out of scope)
+Real drag-and-drop on the board (currently a per-card `<select>` — functionally complete). Bulk actions. Board column virtualization.
