@@ -1416,40 +1416,365 @@ class InsightsOut(BaseModel):
     roadmap_summary: RoadmapSummary | None
 ```
 
-- [ ] **Step 2: `app/domain/insights/ranker.py`** — `async def next_best_action(session, user_id) -> NextStepData | None` where `NextStepData` is a frozen dataclass `{kind, title, reason, entity_type: str|None, entity_id: uuid.UUID|None}`. Implement the 5 ordered rules from spec R7 (a→e) with direct `select(...)` queries against `Application` (status `awaiting_approval`; `applied` + stale 14d), `JobMatch` (count), `SkillGap` (aggregate count), `LearningRecommendation`+`RoadmapMilestone` (active rec with a `not_started` milestone), `Job` (count `user_id == user_id`). First rule that fires wins; else `None`.
+**RULING (controller, pre-dispatch): `JobMatch.strengths` jsonb is DIMENSION-keyed** — `{"dimension": <name>, "raw_score": float, "contribution": float}` (from `scorer.py:301`), NOT skill-slug-keyed. So `InsightsOut.strengths` are the user's strong *scoring dimensions* (skill / experience / seniority / …), mapped into `SkillMention` as `{skill_slug: <dimension>, skill_label: <dimension .replace("_"," ").title()>, detail: f"Strong across {n} of your recent matches"}`. `trending_skills` DO come from real skill slugs (`jobs.required_skills` jsonb = `[{skill_id, slug, label, weight}, …]`). Cost if wrong: the Insights "Strengths" panel shows "Experience / Seniority" instead of individual skills — acceptable and honest given the data; a skill-level strengths signal is a 12b/13 refinement.
 
-- [ ] **Step 3: `app/domain/insights/service.py`** — `InsightsService(session).compose(user_id) -> InsightsData` (a dataclass mirroring `InsightsOut`'s fields, mapped in the route). Logic per spec R7. For the lazy aggregate rollup: `InsightsService` must NOT import `MatchService` (sibling domain). Instead inline the same delete-then-insert rollup as a private helper, OR (simpler) have the route call `MatchService(db).aggregate_skill_gaps(user.id)` when `skills_to_develop` would be empty and `JobMatch` count > 0, then re-query. **Ruling for the implementer: do the lazy rollup in the ROUTE** (`app.api` may import both services), keeping `InsightsService` a pure reader. Cap lists per spec (strengths 6, skills_to_develop 8, trending 10, projects 4).
+- [ ] **Step 2: `app/domain/insights/ranker.py`** (full code)
+```python
+from __future__ import annotations
 
-- [ ] **Step 4: `app/api/v1/insights.py`**
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.application import Application
+from app.models.job import Job
+from app.models.learning import LearningRecommendation, RoadmapMilestone
+from app.models.match import JobMatch, SkillGap
+
+
+@dataclass(frozen=True)
+class NextStepData:
+    kind: str
+    title: str
+    reason: str
+    entity_type: str | None
+    entity_id: uuid.UUID | None
+
+
+async def next_best_action(
+    session: AsyncSession, user_id: uuid.UUID
+) -> NextStepData | None:
+    # (a) an application waiting on human approval
+    row = (
+        await session.execute(
+            select(Application.id).where(
+                Application.user_id == user_id,
+                Application.status == "awaiting_approval",
+                Application.deleted_at.is_(None),
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is not None:
+        return NextStepData(
+            kind="review_approval",
+            title="Review an application that's ready to send",
+            reason="An application is waiting for your approval before it goes out.",
+            entity_type="application", entity_id=row,
+        )
+
+    # (b) scored jobs but no aggregate gap rollup yet
+    match_count = (
+        await session.execute(
+            select(func.count()).select_from(JobMatch).where(JobMatch.user_id == user_id)
+        )
+    ).scalar_one()
+    agg_count = (
+        await session.execute(
+            select(func.count()).select_from(SkillGap).where(
+                SkillGap.user_id == user_id, SkillGap.scope == "aggregate"
+            )
+        )
+    ).scalar_one()
+    if match_count > 0 and agg_count == 0:
+        return NextStepData(
+            kind="refresh_gaps", title="Refresh your skill-gap analysis",
+            reason="You've scored some jobs -- roll up the gaps to see what to learn.",
+            entity_type=None, entity_id=None,
+        )
+
+    # (c) an active roadmap with a milestone not yet started
+    ms = (
+        await session.execute(
+            select(RoadmapMilestone.recommendation_id, RoadmapMilestone.title)
+            .join(
+                LearningRecommendation,
+                LearningRecommendation.id == RoadmapMilestone.recommendation_id,
+            )
+            .where(
+                RoadmapMilestone.user_id == user_id,
+                RoadmapMilestone.status == "not_started",
+                LearningRecommendation.status == "active",
+            )
+            .order_by(RoadmapMilestone.order_index)
+            .limit(1)
+        )
+    ).first()
+    if ms is not None:
+        return NextStepData(
+            kind="start_milestone", title="Start your next learning milestone",
+            reason=f"'{ms.title}' is ready to begin.",
+            entity_type="roadmap", entity_id=ms.recommendation_id,
+        )
+
+    # (d) fewer than 3 jobs tracked
+    own_jobs = (
+        await session.execute(
+            select(func.count()).select_from(Job).where(
+                Job.user_id == user_id, Job.deleted_at.is_(None)
+            )
+        )
+    ).scalar_one()
+    if own_jobs < 3:
+        return NextStepData(
+            kind="add_job", title="Add a job you're interested in",
+            reason="Track a few roles so Mana can tailor its guidance.",
+            entity_type=None, entity_id=None,
+        )
+
+    # (e) a stale application still sitting at 'applied'
+    stale_cutoff = datetime.now(UTC) - timedelta(days=14)
+    stale = (
+        await session.execute(
+            select(Application.id).where(
+                Application.user_id == user_id,
+                Application.status == "applied",
+                Application.deleted_at.is_(None),
+                Application.last_status_change_at < stale_cutoff,
+            ).order_by(Application.last_status_change_at).limit(1)
+        )
+    ).scalar_one_or_none()
+    if stale is not None:
+        return NextStepData(
+            kind="follow_up", title="Follow up on a stale application",
+            reason="It's been over two weeks since you applied -- a nudge can help.",
+            entity_type="application", entity_id=stale,
+        )
+
+    return None
+```
+
+- [ ] **Step 3: `app/domain/insights/service.py`** (full code). `InsightsService` is a **pure reader** — imports `app.core.*` / `app.models.*` only (NOT `MatchService`). The lazy aggregate rollup happens in the ROUTE.
+```python
+from __future__ import annotations
+
+import uuid
+from collections import Counter
+from dataclasses import dataclass, field
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.job import Job
+from app.models.learning import LearningRecommendation, RoadmapMilestone
+from app.models.match import JobMatch, SkillGap
+
+_SEV_RANK = {"critical": 0, "important": 1, "nice_to_have": 2}
+
+
+@dataclass(frozen=True)
+class MentionData:
+    skill_slug: str
+    skill_label: str
+    detail: str | None
+
+
+@dataclass(frozen=True)
+class RoadmapSummaryData:
+    id: uuid.UUID
+    title: str
+    next_step: str | None
+    milestones_done: int
+    milestones_total: int
+
+
+@dataclass
+class InsightsData:
+    strengths: list[MentionData] = field(default_factory=list)
+    skills_to_develop: list[dict[str, Any]] = field(default_factory=list)
+    trending_skills: list[MentionData] = field(default_factory=list)
+    suggested_projects: list[str] = field(default_factory=list)
+    roadmap_summary: RoadmapSummaryData | None = None
+
+
+def _gap_dict(g: SkillGap) -> dict[str, Any]:
+    return {
+        "id": g.id, "scope": g.scope, "job_match_id": g.job_match_id,
+        "skill_slug": g.skill_slug, "skill_label": g.skill_label,
+        "severity": g.severity, "frequency": g.frequency,
+        "rationale": g.rationale, "status": g.status,
+    }
+
+
+class InsightsService:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def compose(self, user_id: uuid.UUID) -> InsightsData:
+        return InsightsData(
+            strengths=await self._strengths(user_id),
+            skills_to_develop=await self._skills_to_develop(user_id),
+            trending_skills=await self._trending(),
+            suggested_projects=await self._suggested_projects(user_id),
+            roadmap_summary=await self._roadmap_summary(user_id),
+        )
+
+    async def _strengths(self, user_id: uuid.UUID) -> list[MentionData]:
+        rows = (
+            await self._session.execute(
+                select(JobMatch.strengths)
+                .where(JobMatch.user_id == user_id, JobMatch.status == "ready")
+                .order_by(JobMatch.computed_at.desc())
+                .limit(20)
+            )
+        ).scalars().all()
+        counter: Counter[str] = Counter()
+        for strengths in rows:
+            for s in strengths or []:
+                dim = str(s.get("dimension") or "").strip()
+                if dim:
+                    counter[dim] += 1
+        out: list[MentionData] = []
+        for dim, n in counter.most_common(6):
+            out.append(
+                MentionData(
+                    skill_slug=dim, skill_label=dim.replace("_", " ").title(),
+                    detail=f"Strong across {n} of your recent matches",
+                )
+            )
+        return out
+
+    async def _skills_to_develop(self, user_id: uuid.UUID) -> list[dict[str, Any]]:
+        rows = (
+            await self._session.execute(
+                select(SkillGap).where(
+                    SkillGap.user_id == user_id, SkillGap.scope == "aggregate"
+                )
+            )
+        ).scalars().all()
+        ranked = sorted(
+            rows, key=lambda g: (_SEV_RANK.get(g.severity, 9), -g.frequency)
+        )
+        return [_gap_dict(g) for g in ranked[:8]]
+
+    async def _trending(self) -> list[MentionData]:
+        rows = (
+            await self._session.execute(
+                select(Job.required_skills).where(
+                    Job.status == "ready", Job.deleted_at.is_(None)
+                )
+            )
+        ).scalars().all()
+        label: dict[str, str] = {}
+        counter: Counter[str] = Counter()
+        for req in rows:
+            for sk in req or []:
+                slug = str(sk.get("slug") or "").strip()
+                if not slug:
+                    continue
+                counter[slug] += 1
+                label.setdefault(slug, str(sk.get("label") or slug))
+        return [
+            MentionData(
+                skill_slug=slug, skill_label=label.get(slug, slug),
+                detail=f"in {n} roles",
+            )
+            for slug, n in counter.most_common(10)
+        ]
+
+    async def _active_recommendation(
+        self, user_id: uuid.UUID
+    ) -> LearningRecommendation | None:
+        return (
+            await self._session.execute(
+                select(LearningRecommendation)
+                .where(
+                    LearningRecommendation.user_id == user_id,
+                    LearningRecommendation.status == "active",
+                )
+                .order_by(LearningRecommendation.created_at.desc())
+                .limit(1)
+            )
+        ).scalars().first()
+
+    async def _suggested_projects(self, user_id: uuid.UUID) -> list[str]:
+        rec = await self._active_recommendation(user_id)
+        if rec is None:
+            return []
+        rows = (
+            await self._session.execute(
+                select(RoadmapMilestone.practice_project)
+                .where(
+                    RoadmapMilestone.recommendation_id == rec.id,
+                    RoadmapMilestone.status.in_(("not_started", "in_progress")),
+                    RoadmapMilestone.practice_project.is_not(None),
+                )
+                .order_by(RoadmapMilestone.order_index)
+                .limit(4)
+            )
+        ).scalars().all()
+        return [p for p in rows if p]
+
+    async def _roadmap_summary(
+        self, user_id: uuid.UUID
+    ) -> RoadmapSummaryData | None:
+        rec = await self._active_recommendation(user_id)
+        if rec is None:
+            return None
+        total = (
+            await self._session.execute(
+                select(func.count()).select_from(RoadmapMilestone).where(
+                    RoadmapMilestone.recommendation_id == rec.id
+                )
+            )
+        ).scalar_one()
+        done = (
+            await self._session.execute(
+                select(func.count()).select_from(RoadmapMilestone).where(
+                    RoadmapMilestone.recommendation_id == rec.id,
+                    RoadmapMilestone.status == "done",
+                )
+            )
+        ).scalar_one()
+        return RoadmapSummaryData(
+            id=rec.id, title=rec.title, next_step=rec.next_step,
+            milestones_done=int(done), milestones_total=int(total),
+        )
+```
+
+- [ ] **Step 4: `app/api/v1/insights.py`** (full code)
 ```python
 from __future__ import annotations
 
 from fastapi import APIRouter
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbDep
 from app.api.v1.schemas.insights import (
-    InsightsOut, NextStep, RoadmapSummary, SkillMention,
+    InsightsOut,
+    NextStep,
+    RoadmapSummary,
+    SkillMention,
 )
 from app.api.v1.schemas.skill_gaps import SkillGapOut
 from app.domain.insights.ranker import next_best_action
 from app.domain.insights.service import InsightsService
 from app.domain.matching.service import MatchService
-from app.models.match import JobMatch  # count for the lazy-rollup guard
-from sqlalchemy import func, select
+from app.models.match import JobMatch, SkillGap
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
 
 @router.get("")
 async def get_insights(db: DbDep, user: CurrentUser) -> InsightsOut:
-    # Lazy aggregate rollup: first Insights view after scoring has no aggregate rows.
+    # Lazy aggregate rollup: the first Insights view after scoring has no
+    # aggregate rows yet. app.api may import both services.
     agg_count = (
         await db.execute(
-            select(func.count()).select_from(...)  # SkillGap where user + scope aggregate
+            select(func.count()).select_from(SkillGap).where(
+                SkillGap.user_id == user.id, SkillGap.scope == "aggregate"
+            )
         )
     ).scalar_one()
     match_count = (
-        await db.execute(select(func.count()).select_from(JobMatch).where(JobMatch.user_id == user.id))
+        await db.execute(
+            select(func.count()).select_from(JobMatch).where(
+                JobMatch.user_id == user.id
+            )
+        )
     ).scalar_one()
     if agg_count == 0 and match_count > 0:
         await MatchService(db).aggregate_skill_gaps(user.id)
@@ -1457,22 +1782,37 @@ async def get_insights(db: DbDep, user: CurrentUser) -> InsightsOut:
     data = await InsightsService(db).compose(user.id)
     nba = await next_best_action(db, user.id)
     return InsightsOut(
-        strengths=[SkillMention(**s.__dict__) for s in data.strengths],
+        strengths=[
+            SkillMention(skill_slug=m.skill_slug, skill_label=m.skill_label, detail=m.detail)
+            for m in data.strengths
+        ],
         skills_to_develop=[SkillGapOut(**g) for g in data.skills_to_develop],
         recommended_next_step=(
-            NextStep(kind=nba.kind, title=nba.title, reason=nba.reason,
-                     entity_type=nba.entity_type, entity_id=nba.entity_id)
-            if nba is not None else None
+            NextStep(
+                kind=nba.kind, title=nba.title, reason=nba.reason,
+                entity_type=nba.entity_type, entity_id=nba.entity_id,
+            )
+            if nba is not None
+            else None
         ),
-        trending_skills=[SkillMention(**s.__dict__) for s in data.trending_skills],
+        trending_skills=[
+            SkillMention(skill_slug=m.skill_slug, skill_label=m.skill_label, detail=m.detail)
+            for m in data.trending_skills
+        ],
         suggested_projects=data.suggested_projects,
         roadmap_summary=(
-            RoadmapSummary(**data.roadmap_summary.__dict__)
-            if data.roadmap_summary is not None else None
+            RoadmapSummary(
+                id=data.roadmap_summary.id, title=data.roadmap_summary.title,
+                next_step=data.roadmap_summary.next_step,
+                milestones_done=data.roadmap_summary.milestones_done,
+                milestones_total=data.roadmap_summary.milestones_total,
+            )
+            if data.roadmap_summary is not None
+            else None
         ),
     )
 ```
-**NOTE for the implementer:** finish the `agg_count` query (`select(func.count()).select_from(SkillGap).where(SkillGap.user_id == user.id, SkillGap.scope == "aggregate")`). Pick clean dataclass↔schema mapping — if `**s.__dict__` is fragile under mypy, map fields explicitly. `data.skills_to_develop` should already be `list[dict]` shaped like `_gap_out` output, or map from `SkillGap` rows via the existing `_gap_out` in `skill_gaps.py` (import it).
+`SkillGapOut(**g)` consumes the `_gap_dict` output from `service.py` (its keys are exactly `SkillGapOut`'s fields).
 
 - [ ] **Step 5: `router.py`** — add `insights` to the import block (alphabetical: after `health`, before `jobs`) + `api_router.include_router(insights.router)`.
 
