@@ -215,6 +215,74 @@ export interface SkillGap {
   severity: "critical" | "important" | "nice_to_have";
   frequency: number; rationale: string | null; status: SkillGapStatus;
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Career insights + roadmaps (Phase 12)                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface SkillMention {
+  skill_slug: string;
+  skill_label: string;
+  detail: string | null;
+}
+
+export interface NextStep {
+  kind: string;
+  title: string;
+  reason: string;
+  entity_type: string | null;
+  entity_id: string | null;
+}
+
+export interface RoadmapSummary {
+  id: string;
+  title: string;
+  next_step: string | null;
+  milestones_done: number;
+  milestones_total: number;
+}
+
+export interface Insights {
+  strengths: SkillMention[];
+  skills_to_develop: SkillGap[];
+  recommended_next_step: NextStep | null;
+  trending_skills: SkillMention[];
+  suggested_projects: string[];
+  roadmap_summary: RoadmapSummary | null;
+}
+
+export type RoadmapMilestoneStatus = "not_started" | "in_progress" | "done";
+
+export interface Roadmap {
+  id: string;
+  scope: string;
+  job_id: string | null;
+  title: string;
+  summary: string | null;
+  next_step: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Milestone {
+  id: string;
+  order_index: number;
+  skill_slug: string;
+  skill_label: string;
+  title: string;
+  why_it_matters: string;
+  resource_ids: string[];
+  est_hours: number | null;
+  practice_project: string | null;
+  checkpoint: string | null;
+  status: RoadmapMilestoneStatus;
+  completed_at: string | null;
+}
+
+export interface RoadmapDetail extends Roadmap {
+  milestones: Milestone[];
+}
 export interface JobCard {
   id: string; title: string | null; company: string | null; location: string | null;
   work_mode: "remote" | "hybrid" | "onsite" | null;

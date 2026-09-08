@@ -369,3 +369,39 @@ describe("applications + approvals", () => {
     expect(JSON.parse(String(calls[0].init?.body))).toEqual({ decision: "approve" });
   });
 });
+
+describe("insights + roadmaps", () => {
+  it("insights.get GETs /insights", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).insights.get();
+    expect(calls[0].path).toBe("/api/v1/insights");
+  });
+
+  it("skillGaps.aggregate POSTs /skill-gaps/aggregate", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).skillGaps.aggregate();
+    expect(calls[0].path).toBe("/api/v1/skill-gaps/aggregate");
+    expect(calls[0].init?.method).toBe("POST");
+  });
+
+  it("roadmaps.create POSTs /roadmaps with a body", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).roadmaps.create();
+    expect(calls[0].path).toBe("/api/v1/roadmaps");
+    expect(calls[0].init?.method).toBe("POST");
+  });
+
+  it("roadmaps.get GETs /roadmaps/{id}", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).roadmaps.get("r1");
+    expect(calls[0].path).toBe("/api/v1/roadmaps/r1");
+  });
+
+  it("roadmaps.patchMilestone PATCHes the milestone path", async () => {
+    const { f, calls } = recordingFetcher();
+    await makeApi(f).roadmaps.patchMilestone("r1", "m1", "done");
+    expect(calls[0].path).toBe("/api/v1/roadmaps/r1/milestones/m1");
+    expect(calls[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ status: "done" });
+  });
+});

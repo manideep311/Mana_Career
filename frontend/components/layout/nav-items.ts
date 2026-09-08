@@ -1,6 +1,7 @@
 import {
   Activity,
   Briefcase,
+  Compass,
   FileText,
   FlaskConical,
   House,
@@ -30,6 +31,7 @@ export const NAV: NavItem[] = [
   { href: "/resume", label: "Résumé", icon: ScrollText, ready: true },
   { href: "/jobs", label: "Jobs", icon: Briefcase, ready: true },
   { href: "/applications", label: "Applications", icon: FileText, ready: true },
+  { href: "/insights", label: "Insights", icon: Compass, ready: true },
   { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },
   { href: "/activity", label: "Activity", icon: Activity, ready: true },
   { href: "/profile", label: "Profile", icon: User, ready: true },

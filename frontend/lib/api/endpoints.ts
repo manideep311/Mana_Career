@@ -20,6 +20,7 @@ import {
   ExtractedEducation,
   ExtractedProject,
   ExtractedCertification,
+  Insights,
   ItemOut,
   JobCard,
   JobDetail,
@@ -29,6 +30,7 @@ import {
   JobStatus,
   MatchComponent,
   MatchStatus,
+  Milestone,
   ProfileFull,
   ProfileSkill,
   ResumeDiff,
@@ -36,6 +38,9 @@ import {
   ResumeOut,
   ResumeVersion,
   ResumeVersionDetail,
+  Roadmap,
+  RoadmapDetail,
+  RoadmapMilestoneStatus,
   RunRef,
   Section,
   SkillGap,
@@ -268,8 +273,37 @@ export function makeApi(f: Fetcher) {
         return f<SkillGap[]>(`/api/v1/skill-gaps?scope=job&job_match_id=${job_match_id}`);
       },
       async patch(id: string, status: SkillGapStatus) {
-        return f<SkillGap>(`/api/v1/skill-gaps/${id}`, { method: "PATCH",
-          body: JSON.stringify({ status }), headers: { "Content-Type": "application/json" } });
+        return f<SkillGap>(`/api/v1/skill-gaps/${id}`, json("PATCH", { status }));
+      },
+      async aggregate() {
+        return f<SkillGap[]>("/api/v1/skill-gaps/aggregate", json("POST"));
+      },
+    },
+    insights: {
+      async get() {
+        return f<Insights>("/api/v1/insights");
+      },
+    },
+    roadmaps: {
+      async list() {
+        return f<{ items: Roadmap[] }>("/api/v1/roadmaps");
+      },
+      async get(id: string) {
+        return f<RoadmapDetail>(`/api/v1/roadmaps/${id}`);
+      },
+      async create(body: { scope?: string; job_id?: string } = {}) {
+        return f<{ id: string }>("/api/v1/roadmaps", json("POST", body));
+      },
+      async patch(id: string, status: "active" | "archived") {
+        return f<Roadmap>(`/api/v1/roadmaps/${id}`, json("PATCH", { status }));
+      },
+      async patchMilestone(
+        recId: string, milestoneId: string, status: RoadmapMilestoneStatus,
+      ) {
+        return f<Milestone>(
+          `/api/v1/roadmaps/${recId}/milestones/${milestoneId}`,
+          json("PATCH", { status }),
+        );
       },
     },
     eval: {
