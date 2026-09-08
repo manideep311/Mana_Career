@@ -106,6 +106,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
       - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test run

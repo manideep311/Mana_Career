@@ -2,3 +2,14 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+
+# Security overrides (Phase 13 Task 6b): force patched transitives so
+# `pnpm audit --audit-level=high` passes. pnpm 11 reads overrides from here,
+# not from the package.json "pnpm" field.
+overrides:
+  # GHSA-fx2h-pf6j-xcff - vite server.fs.deny bypass on Windows; patched >=6.4.3.
+  # Pulled in only by @vitejs/plugin-react and vitest (dev tooling).
+  vite: "^6.4.3"
+  # GHSA-6g55-p6wh-862q + GHSA-r28c-9q8g-f849 - postcss sourceMappingURL
+  # path traversal / file read; patched >=8.5.18. Next.js bundles 8.4.31.
+  postcss: "^8.5.18"
