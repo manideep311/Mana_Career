@@ -1854,3 +1854,40 @@ git commit -m "test(insights): end-to-end aggregate -> roadmap -> insights flow 
 ## Task 10: verification + whole-branch review + completion report + squash + push + CI
 
 Controller-only. Mirror the Phase 11a closeout: full local gate; run every pure suite added (`tests/domain/roadmap/test_catalog_json.py` at least); whole-branch review (inline except Tasks 1/4/5/9 which had subagent reviews — the whole-branch pass is still a fresh read of `<fork>..HEAD` for cross-task integration, esp. the planner `done`/`error` frame `status` key vs `status_stream`'s terminal check, the `lint-imports` contract, and the migration `0015` head); directly-verified baseline counts (checkout the fork commit, `pytest --collect-only` + `mypy app`, restore); append the completion report to this plan file; squash/fast-forward to `main`; push; watch CI (the `backend` job's real-Postgres DB suite is the proof — watch for: `0015` applying, the HNSW index on `learning_resources.embedding`, the `cosine_distance`/`overlap` operators against real pgvector, and the `fake` LLM path through `RoadmapPlanner` not raising); `finishing-a-development-branch`; update `mana-career-roadmap-progress` memory.
+
+---
+
+## Completion report (2026-09-08)
+
+**Status: COMPLETE.** Branch `phase-12a-career-insights-backend` fast-forwarded to `main`.
+
+### Commits (11 on top of the spec/plan `b999e88`)
+| SHA | Task | |
+|---|---|---|
+| `2db58b6` | 1 | migration `0015` + `LearningResource` / `LearningRecommendation` / `RoadmapMilestone` models (single head; SUBAGENT review, 0 findings) |
+| `dd47a46` | 2 | 58-entry `learning_resources.json` catalog + `seed_learning_resources()` + `python -m app.seed learning`/`all` + pure catalog-JSON guard test |
+| `1953ef9` | 3 | `MatchService.aggregate_skill_gaps` (deterministic delete-then-insert rollup) + `POST /skill-gaps/aggregate` (200) + `list_skill_gaps` aggregate-order branch |
+| `e4216e8` | 4 | `RoadmapPlanner` — per-gap pgvector retrieval over the catalog + one grounded LLM call per milestone + `publish` streaming (SUBAGENT review, 0 findings) |
+| `ee2ea77` | — | docs: plan fixes recorded (fake-LLM `MilestoneDraft` bounds; worker Redis pattern) |
+| `057af47` | 5 | `RoadmapService` (7 methods incl. milestone-done → aggregate-gap `closed` re-scoring hook) + `plan_roadmap` ARQ task (own Redis conn, `session.commit()` in `finally`) + `roadmap_channel` + conftest/worker registration (SUBAGENT review, 0 findings) |
+| `71a1bab` | 6 | `/roadmaps` API — `POST` 202 / `GET` list / `GET {id}` (with milestones) / `PATCH {id}` / `PATCH {id}/milestones/{mid}` + schemas |
+| `2cb985d` | 7 | `GET /roadmaps/{id}/events` SSE relay (mirrors `jobs.py::job_events`, replays milestones on `open`) + `GET /learning-resources` (`skills &&` overlap via `.op("&&")`) |
+| `bb1d73f` | 8 | `GET /insights` — pure composition: `strengths` (strong scoring *dimensions*), `skills_to_develop` (aggregate gaps), deterministic `next_best_action` ranker (5 ordered rules), `trending_skills` (real slugs from `jobs.required_skills`), `suggested_projects`, `roadmap_summary`; lazy aggregate rollup in the route |
+| `cc8c9a0` | — | docs: plan expanded with full Task 8 ranker/`InsightsService` code + strengths-dimension ruling |
+| `0ebb6e6` | 9 | end-to-end DB-gated integration test: aggregate → roadmap plan → milestone done → `/insights` |
+
+### Verification
+- **Baseline** (`b999e88`, = `03f474c` source): 162 mypy source files, 425 pytest cases.
+- **HEAD** (`0ebb6e6`): 175 source files (+13), 440 cases (+15: T1 1, T2 2, T3 1, T4 1, T5 1, T6 3, T7 2, T8 3, T9 1).
+- `ruff check .` clean · `mypy app` clean (175) · `lint-imports` **3 kept, 0 broken** · `pytest -q --collect-only` 440, 0 errors · `alembic heads` → `0015_learning_roadmap` (single) · `tests/domain/roadmap/test_catalog_json.py` (pure) passes.
+- Whole-branch review: inline (Tasks 1/4/5/9 also had subagent reviews). All 3 routers + the `/skill-gaps/aggregate` route wired in `router.py`; `learning` model registered; `plan_roadmap` in `WorkerSettings.functions`; `_milestone_payload` / `RoadmapService` / `roadmap_channel` / `aggregate_skill_gaps` thread consistently; `roadmap` + `insights` domain packages stay import-leaves; planner terminal frames carry the `status` key `status_stream` needs. No cross-task defects.
+
+### Rulings during execution
+- **`MilestoneDraft` bounds are loose** (`default=""` / `ge=0`) so the CI `FakeLLMProvider`'s schema-stub validates; `_draft` enforces real content in Python + clamps `est_hours` to `[1,200]` + `try/except`s the `llm.complete` call. Net CI behaviour: 0 milestones but the roadmap still reaches `status='active'` and publishes `done`. No `env=="test"` branch in `planner.py`.
+- **`plan_roadmap` mirrors `agent.py`** — own `Redis.from_url()` + `aclose()` in `finally` (ARQ `ctx` carries no pool here); `session.commit()` in a `finally` so an archived-on-failure roadmap persists before the re-raise.
+- **`JobMatch.strengths` is dimension-keyed** (`{dimension, raw_score, contribution}`), so `/insights` `strengths` surfaces strong scoring *dimensions* (Experience, Seniority, …); `trending_skills` uses real skill slugs. Skill-level strengths is a later refinement.
+- **`/learning-resources` array overlap** uses `LearningResource.skills.op("&&")(slugs)` — the generic `sqlalchemy.ARRAY` comparator has no `.overlap`; `&&` binds `::TEXT[]` and type-checks clean.
+- **Insights lazy aggregate rollup lives in the route** (`app.api` may import both services), keeping `InsightsService` a pure reader.
+
+### Deferred (12b / later)
+Insights page + roadmap timeline UI + streamed-milestone consumer + mark-done (Phase 12b). LLM-written Next-Best-Action framing. Roadmap re-generation / milestone re-run. Per-`job` scoped roadmaps beyond storing `job_id`. `learning_resources` admin CRUD. Skill-level (not dimension-level) strengths.
