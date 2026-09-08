@@ -39,6 +39,7 @@ dev = [
   "mypy>=1.13",
   "import-linter>=2.1",
   "asgi-lifespan>=2.1",
+  "pip-audit>=2.7",
 ]
 
 [tool.pytest.ini_options]

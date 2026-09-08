@@ -30,8 +30,8 @@ jobs:
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET: ci-secret
-      # Phase 0 floor; Phase 13 (testing + security) tightens this.
-      PYTEST_ADDOPTS: "--cov-fail-under=55"
+      # Phase 13 floor: raised from 55. Total is ~88%; the closeout sets the highest safe value.
+      PYTEST_ADDOPTS: "--cov-fail-under=80"
     defaults:
       run:
         working-directory: backend
@@ -39,6 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
       - run: uv sync --frozen
+      - run: uv run pip-audit
       - run: PGPASSWORD=mana psql -h localhost -U mana -d mana -c 'CREATE DATABASE mana_test;' || true
       - run: uv run ruff check .
       - run: uv run lint-imports
