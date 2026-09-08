@@ -13,9 +13,15 @@ from app.core.config import Settings
 SECRET_KEYS: frozenset[str] = frozenset({
     "password", "token", "authorization", "api_key", "apikey", "jwt_secret",
     "secret", "refresh_token", "access_token", "set-cookie", "cookie",
+    "jwt", "database_url",
 })
 SECRET_PATTERN: re.Pattern[str] = re.compile(
-    r"(sk-[A-Za-z0-9_\-]{8,})|(Bearer\s+[A-Za-z0-9._\-]{10,})|([A-Fa-f0-9]{24,})"
+    r"(sk-[A-Za-z0-9_\-]{8,})"
+    r"|(Bearer\s+[A-Za-z0-9._\-]{10,})"
+    r"|([A-Fa-f0-9]{24,})"
+    r"|([A-Za-z0-9_\-]{12,}\.[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,})"  # JWT: header.payload.sig
+    r"|(\$argon2(?:id|i|d)\$[^\s\"']+)"  # argon2 PHC hash
+    r"|(://[^\s:/@]+:[^\s/@]+@)"  # scheme://user:pass@
 )
 
 
