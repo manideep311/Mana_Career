@@ -256,3 +256,35 @@ git commit -m "docs: SECURITY.md + threat model"
 ## Task 8: verification + whole-branch review + completion report + squash + push + CI
 
 Controller-only. Full local gate; run `tests/security/test_secret_redaction.py` (the one pure module) + confirm every other new module collects; whole-branch review (inline except Tasks 1/4/6 which had subagent reviews — the whole-branch pass re-reads `<fork>..HEAD` for: any assertion that was softened to pass rather than reflecting a real invariant, the `ci.yml` YAML validity + step ordering, the `--cov-fail-under` value being ≤ actual−3, `pip-audit`/`pnpm audit` not neutered with `|| true`); directly-verified baseline counts (checkout the fork commit, `pytest --collect-only` + `mypy app`, restore); append the completion report to this plan; squash/fast-forward to `main`; push; **watch CI closely — the new `pip-audit` / `pnpm audit` steps and the coverage-floor bump are the real risks; if `pip-audit` reds on an advisory that appeared between local run and CI, fix forward** (bump or documented `--ignore-vuln`); `finishing-a-development-branch`; update `mana-career-roadmap-progress` memory (Phase 13 done; only Phase 14 remains).
+
+---
+
+## Completion report (2026-09-08)
+
+**Status: COMPLETE.** Branch `phase-13-testing-security-hardening` fast-forwarded to `main`.
+
+### Commits (8, on top of the spec/plan doc `93c2980`)
+| SHA | Task | |
+|---|---|---|
+| `f5cb744` | 1 | `tests/security/test_tenant_isolation.py` — 19 tests, non-owner → **404** (strict, never 403) across resumes/jobs/matches/applications/approvals/roadmaps/ai-sessions/skill-gaps + list-leak. Subagent-reviewed: zero product findings — every non-owner path traces to `NotFoundError`. |
+| `d295c78` | 2 | `test_authz.py` — 8 tests: 401 on missing / garbage / wrong-secret / expired / wrong-type / nonexistent-user; 403 non-admin; admin opens the gate. |
+| `48f8487` | 3 | `test_secret_redaction.py` (pure, 7 tests) + `app/core/logging.py`: `SECRET_PATTERN` +3 clauses (JWT triplet / `$argon2` / `://user:pass@`), `SECRET_KEYS` +`jwt`,`database_url`. `test_logging.py`'s 3 over-redaction guards stay green. |
+| `eca258d` | 4 | `test_prompt_injection.py` — 4 tests, subagent-reviewed non-vacuous: ClaimValidator flags the ungrounded injection; deterministic scorer byte-identical while `inputs_hash` moves; RAG fences retrieved text as `<untrusted_data>`; approval hash-gate halts on a tampered body. No product gap. |
+| `865060f` | 5 | `test_agent_limits.py` — 5 tests: reachability proof that the send node is unreachable from `__start__` with `human_approval`'s out-edges cut; reject ≠ send (+ approve positive control); `MAX_TRIES` retry cap finalizes `error`; `max_steps=1` halts a real run. |
+| `a206080` | 6 | CI: `uv run pip-audit` (backend job, clean — 0 findings; `pip-audit>=2.7` in dev deps, `uv.lock` re-locked additively); `--cov-fail-under` 55 → 80. |
+| `a7b1a6d` | 6b | `next` 15.1.0 → `^15.5.25` + `eslint-config-next`, `vitest` `^2.1.8` → `^3.2.7`, `@vitejs/plugin-react` `^4.7.0`; `pnpm-workspace.yaml` overrides `vite ^6.4.3` / `postcss ^8.5.18` (pnpm 11 ignores the `package.json` `pnpm` field). Clears **2 critical + 13 high** advisories. CI frontend job: `pnpm audit --audit-level=high`. 205 tests green, no vitest-config migration needed. |
+| `1aa9244` | 7 | `SECURITY.md` (posture list, 31 verified `path:symbol` pointers) + `docs/threat-model.md` (7-row STRIDE-lite table + out-of-scope). |
+
+### Verification
+- **Baseline** (`93c2980`, = `13bfe28` source): 175 mypy files / 440 tests. **HEAD** (`1aa9244`): 175 mypy files (Phase 13 adds no `app/` modules) / 483 tests (+43 security tests).
+- Backend local gate on HEAD: `ruff` clean · `mypy app` 175 files clean · `lint-imports` `3 kept, 0 broken` · `pip-audit` — no known vulnerabilities · `pytest --collect-only` 483 tests, 0 errors · the 15 pure tests (`test_secret_redaction` 7 + `test_logging` 5 + `test_prompt_injection` 2 + `test_agent_limits` 1) pass. The 40 DB-gated security tests run in CI only.
+- Frontend (Task 6b): `pnpm audit --audit-level=high` exit 0 (clean at every severity) · `pnpm lint` clean · `pnpm exec tsc --noEmit` exit 0 · `pnpm test run` 205/205.
+- Whole-branch review: inline. Production surface changed by 8 lines (`logging.py` regex) + the dependency bumps; `ci.yml` steps ordered audit-before-build, no `|| true`; `--cov-fail-under=80` sits ≥8 pts under the ~88% CI total and the security tests raise it further. No stray changes.
+
+### Rulings during execution
+- **R (Task 6 → 6b):** authorized a `frontend/package.json` bump (outside Task 6's file scope) — 2 CRITICAL advisories in `next`, the framework serving the whole app, are squarely Phase 13's "no criticals" mandate; deferring to Phase 14 would contradict the phase's success bar.
+- **R (Task 3):** extended `SECRET_PATTERN` (a security-critical fn) with 3 shape clauses + 2 key names — over-redaction is the safe failure direction for a log redactor; the 3 existing `test_logging.py` guards + a full `--collect-only` confirm nothing legitimate is masked.
+- **R (Task 6b):** overrides went in `pnpm-workspace.yaml` (a 4th file) because pnpm 11 ignores `package.json`'s `pnpm` field — functionally equivalent to the planned `package.json` overrides block.
+
+### Deferred (noted in `docs/threat-model.md` § Out of scope)
+Load / soak testing ("load smoke"). WAF / edge DDoS. SSO / OAuth. External pen-test / bug bounty. Container image scanning (→ Phase 14).
