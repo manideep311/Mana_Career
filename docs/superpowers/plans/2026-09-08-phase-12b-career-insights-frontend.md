@@ -841,3 +841,31 @@ git commit -m "feat(insights-fe): /insights page -- next step, skills, roadmap, 
 ## Task 6: whole-branch review + full gate + completion report + squash + push + CI
 
 Controller-only. Mirror the Phase 11b closeout: full frontend gate (`pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm vitest run` — whole suite); inline whole-branch review of `<fork>..HEAD` (cross-task checks: the `qk.roadmap` optimistic write shape vs `RoadmapDetail`, the `useRoadmapEvents` frame shape vs `roadmap_events` relay, every `<Link href>` resolves, `Insights` nav `ready:true` has a real route, `Compass` icon imported, no `x!`, JSX apostrophes escaped); directly-verified baseline test counts (checkout the fork commit, `pnpm vitest run` count, restore); append the completion report to this plan; fast-forward `main`; push; watch CI (frontend job); `finishing-a-development-branch`; update `mana-career-roadmap-progress` memory (Phase 12b done; 13–14 remain).
+
+---
+
+## Completion report (2026-09-08)
+
+**Status: COMPLETE.** Branch `phase-12b-career-insights-frontend` fast-forwarded to `main`.
+
+### Commits (5, on top of the spec/plan doc `ebdfcbc`)
+| SHA | Task | |
+|---|---|---|
+| `b3c1763` | 1 | `api.insights.get`, `api.roadmaps.{list,get,create,patch,patchMilestone}`, `api.skillGaps.aggregate`; 8 types (`Insights`/`Roadmap`/`Milestone`/`RoadmapDetail`/`RoadmapMilestoneStatus`/`SkillMention`/`NextStep`/`RoadmapSummary`); `qk.insights`/`qk.roadmap`/`qk.roadmaps`; "Insights" nav entry (`Compass`, `ready:true`). Controller finished + committed (implementer stalled on watchdog); fixed one `tsc` TS2783 in the pre-existing `skillGaps.patch` it cleaned up. |
+| `4e60015` | 2 | `useRoadmapEvents(id|null)` — SSE hook over `GET /roadmaps/{id}/events`, dedupe by `id`, sort by `order_index`, idle/streaming/done/error, `parseFrame` copied from `usePrepareRunEvents`. |
+| `c0999e6` | 3 | `NextStepCard`, `SkillPanels` (Strengths + Skills-to-develop with a Refresh button; severity chips copied verbatim from `SkillGaps.tsx`), `MilestoneRow` (native status `<select>`), `TrendingAndProjects`. |
+| `241ef80` | 4 | `RoadmapTimeline` — merges `GET /roadmaps/{id}` (REST) with `useRoadmapEvents` (SSE), optimistic per-milestone status `PATCH` (rollback + toast, `qk.insights` invalidation on "done"). `RoadmapSection` — empty-state "Build my roadmap" → streaming timeline → summary + progress bar. |
+| `18a1818` | 5 | `/insights` route — `InsightsView` (one `useQuery(qk.insights)` feeding all sections + the aggregate-Refresh mutation) + the page shell. |
+
+### Verification
+- **Baseline** (`ebdfcbc`): 57 test files / 184 tests. **HEAD** (`18a1818`): 62 files / 205 tests (+5 files, +21 cases).
+- `pnpm lint` (`next lint`) — clean. `pnpm exec tsc --noEmit` — exit 0. `pnpm vitest run` — 62/62 files, 205/205 tests, no regressions.
+- Whole-branch review: inline (all-frontend). Type threading (`Insights` → sections; `useRoadmapEvents` `{milestones,status,error}` → `RoadmapTimeline`; frame `data.milestone` shape vs the relay), `qk` usage, `api` methods, nav→route, `<Link>` targets, no `x!`, JSX apostrophes — all verified. No integration issues. All additive / backward-compatible.
+
+### Rulings during execution
+- **R (Task 1):** the pre-existing `skillGaps.patch` was hand-rolling `{method, body, headers}`; the implementer switched it to `json("PATCH", {status})` and left a redundant `method:` prefix → `tsc` TS2783. Controller dropped the prefix. No behaviour change.
+- **R (Task 3):** severity chip classes use `text-danger`/`text-warning` (no `-fg`) — a verbatim copy of `components/jobs/SkillGaps.tsx`'s `SEVERITY_CLASS`, superseding the spec prose's `-fg` guess. Consistent with `MatchBadge`/`VersionDiff`.
+- **R (Task 4):** streaming line uses `<Spinner size="sm" />` (its real prop) rather than the plan's `className="h-3 w-3"` — equivalent, no test depends on it.
+
+### Deferred (noted in the 12b spec §5)
+Drag-and-drop milestone reordering; a roadmap archive/regenerate UI; the `POST /roadmaps` `constraints` form; per-`job` roadmaps; a `/learning-resources` browse page; deep-linking `recommended_next_step` beyond the `application` case; Insights on the dashboard.
