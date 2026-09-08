@@ -158,12 +158,16 @@ async def test_list_get_and_patches(client, db_session):
     assert done.status_code == 200
     assert done.json()["status"] == "done"
 
+    # Capture the ids before expire_all() -- afterwards, touching `gap.id` /
+    # `rec.id` on the expired instances would fire a sync refresh outside the
+    # async greenlet (MissingGreenlet).
+    rec_id, gap_id = rec.id, gap.id
     db_session.expire_all()
     gap_row = (
-        await db_session.execute(select(SkillGap).where(SkillGap.id == gap.id))
+        await db_session.execute(select(SkillGap).where(SkillGap.id == gap_id))
     ).scalar_one()
     assert gap_row.status == "closed"
-    assert gap_row.addressed_by_roadmap_id == rec.id
+    assert gap_row.addressed_by_roadmap_id == rec_id
 
 
 async def test_patch_roadmap_rejects_bad_status(client, db_session):

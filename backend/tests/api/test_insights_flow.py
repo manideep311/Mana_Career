@@ -150,11 +150,12 @@ async def test_insights_end_to_end(client, db_session):
             json={"status": "done"},
         )
         assert pr.status_code == 200
+        uid = user.id  # capture before expire_all() -- see test_roadmaps note
         db_session.expire_all()
         closed = (
             await db_session.execute(
                 select(SkillGap).where(
-                    SkillGap.user_id == user.id,
+                    SkillGap.user_id == uid,
                     SkillGap.scope == "aggregate",
                     SkillGap.skill_slug == "python",
                 )
