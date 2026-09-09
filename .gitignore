@@ -34,3 +34,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Local TLS material for compose.prod.yml (never commit real keys)
+deploy/nginx/certs/*
+!deploy/nginx/certs/.gitkeep
