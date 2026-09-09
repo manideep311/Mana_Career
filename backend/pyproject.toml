@@ -28,6 +28,7 @@ dependencies = [
   "markdown-it-py>=3.0.0",
   "python-docx>=1.1.2",
   "xhtml2pdf>=0.2.16",
+  "pypdfium2>=4.30",
 ]
 
 [dependency-groups]
@@ -74,6 +75,10 @@ warn_return_any = false
 
 [[tool.mypy.overrides]]
 module = "xhtml2pdf.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pypdfium2.*"
 ignore_missing_imports = true
 
 [build-system]

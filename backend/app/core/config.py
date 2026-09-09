@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     file_store_local_dir: str = "./var/files"
     resume_max_bytes: int = 10_485_760
     resume_max_pages: int = 15
+    resume_parser: Literal["pdfium", "pypdf"] = "pdfium"
     llm_model_extraction: str = "claude-haiku-4-5-20251001"
     anthropic_model_fallback: str = "claude-sonnet-5"
 

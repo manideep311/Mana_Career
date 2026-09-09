@@ -17,7 +17,7 @@ from app.domain.resume.extractor import ResumeExtractor
 from app.domain.resume.parser import (
     MIN_DIGITAL_TEXT_CHARS,
     SCANNED_PDF_MESSAGE,
-    PypdfResumeParser,
+    get_resume_parser,
 )
 from app.infra.storage.factory import get_file_store
 from app.models.resume import Resume
@@ -81,7 +81,7 @@ async def parse_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
             )
 
             data = await get_file_store(settings).get(resume.file_ref)
-            parsed = await PypdfResumeParser().parse(data)
+            parsed = await get_resume_parser(settings).parse(data)
 
             if parsed.page_count > settings.resume_max_pages:
                 message = (
