@@ -29,3 +29,18 @@ migrate:
 
 smoke:
     ./scripts/smoke.sh
+
+prod-up:
+	docker compose -f compose.prod.yml up -d --build
+
+prod-down:
+	docker compose -f compose.prod.yml down
+
+prod-logs:
+	docker compose -f compose.prod.yml logs -f
+
+seed:
+	docker compose -f compose.prod.yml run --rm migrate python -m app.seed all
+
+smoke-prod:
+	./scripts/smoke-prod.sh

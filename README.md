@@ -69,3 +69,9 @@ cd backend && uv run ruff check . && uv run lint-imports && uv run mypy app && u
 `just` targets: `just up` / `just down` / `just migrate` / `just ci` / `just smoke`.
 Copy `.env.example` to `.env` first; the LLM/embeddings providers default to deterministic
 fakes so the whole stack runs offline.
+
+**Production:** `compose.prod.yml` builds multi-stage images and runs the stack
+behind an nginx reverse proxy with TLS, a one-shot Alembic `migrate` service,
+and healthcheck-gated startup. `just prod-up` / `just seed` / `just smoke-prod`;
+full procedure (certs, backup, restore, rollback) in
+[`docs/runbook.md`](docs/runbook.md).
