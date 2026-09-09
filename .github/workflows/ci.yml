@@ -132,7 +132,7 @@ jobs:
         run: docker compose -f compose.prod.yml build
 
       - name: Trivy scan (api)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mana-career-api:local
           severity: HIGH,CRITICAL
@@ -140,7 +140,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy scan (worker)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mana-career-worker:local
           severity: HIGH,CRITICAL
@@ -148,7 +148,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy scan (frontend)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mana-career-frontend:local
           severity: HIGH,CRITICAL
