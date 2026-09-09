@@ -24,6 +24,12 @@ RUN pnpm build
 
 FROM node:22-slim AS runner
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
+# The standalone server runs `node server.js` — no package manager needed at
+# runtime. Drop the bundled npm/corepack/yarn: smaller image, no CVEs from
+# npm's vendored deps (brace-expansion, tar, pacote, sigstore, …).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+      /usr/local/lib/node_modules/corepack /usr/local/bin/corepack \
+      /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 RUN useradd --system --uid 10001 --create-home app
 WORKDIR /app
 COPY --from=builder --chown=app /app/.next/standalone ./
