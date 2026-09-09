@@ -16,18 +16,27 @@ implementation follows the 14-phase roadmap in §9.
 
 ## Status
 
-CI is green on `main` (backend + frontend jobs, ~128 backend tests against real
-Postgres + Redis, ~92% coverage).
+**All 14 roadmap phases are complete and CI-green on `main`** (backend + `eval` +
+frontend + `images` jobs; ~170 backend tests against real Postgres + Redis,
+including a `tests/security/` suite; ~88% coverage; `pip-audit` + `pnpm audit` +
+Trivy image scans gate every push).
 
 | Phase | Scope | State |
 |---|---|---|
-| **0 — Foundations** | monorepo, `core/` (config, logging, `problem+json` errors, async DB + `Repository`, append-only audit log, Redis rate limiting), Alembic bootstrap, FastAPI app factory + health, ARQ worker skeleton, swappable LLM/embeddings provider seams, Docker Compose, Next.js shell + design tokens, CI | ✅ done, CI-verified |
-| **1a — Authentication** | `users` + `refresh_tokens`, argon2id hashing, HS256 access JWT + opaque rotating refresh with family-wide reuse detection, `/auth` API, `get_current_user` / `get_current_admin` | ✅ done, CI-verified |
-| **1b — Career profile** | `career_profiles` + experiences / education / projects / certifications, deterministic profile-strength scorer, `ProfileService`, `/profile` API (full read, partial update, strength, generic sub-entity CRUD + reorder) | ✅ done, CI-verified |
-| **1c — Frontend shell** | design system + auth screens + profile editor UI | ⏳ next |
-| **2–14** | résumé parsing → career profile generation → job ingestion + search → matching engine → RAG → Mana AI agent → résumé tailoring → cover letter + email → human-approval workflow → application tracker → career insights → testing/security hardening → Docker deploy | ⏳ planned (spec §9) |
+| **0 — Foundations** | monorepo, `core/` (config, logging, `problem+json` errors, async DB + `Repository`, append-only audit log, Redis rate limiting), Alembic bootstrap, app factory + health, ARQ worker, swappable LLM/embeddings seams, dev Docker Compose, Next.js shell + tokens, CI | ✅ |
+| **1 — Auth + career profile + shell** | argon2id + HS256 access JWT + rotating refresh with family reuse-detection; `career_profiles` + sub-entities + deterministic strength scorer; design system + auth/profile UI | ✅ |
+| **2–3 — Résumé → profile** | PDF parsing, structured extraction, profile generation | ✅ |
+| **4–5 — Jobs + matching** | job ingestion + search; deterministic, explainable résumé↔job scorer with per-dimension breakdown + skill gaps | ✅ |
+| **6 — RAG** | pgvector retrieval, chunking, `<untrusted_data>`-fenced context assembly | ✅ |
+| **7 — Mana AI agent** | LangGraph agent (SSE-streamed), block registry, Activity feed | ✅ |
+| **8–9 — Tailoring + letters** | grounded résumé tailoring with a claim validator; cover-letter + application-email drafting | ✅ |
+| **10 — Human-approval workflow** | `interrupt()`-gated send, sha256 payload re-verification, `ConsoleEmailSender`, approval UI | ✅ |
+| **11 — Application tracker** | append-only `application_events`, status board + timeline UI | ✅ |
+| **12 — Career insights + roadmap** | aggregate skill-gap rollup, grounded learning roadmap (streamed), insights + next-best-action | ✅ |
+| **13 — Testing + security hardening** | `tests/security/` (tenant isolation, authz, secret redaction, prompt injection, agent limits); `SECURITY.md`; `docs/threat-model.md`; audit + coverage gates | ✅ |
+| **14 — Docker + deployment** | multi-stage prod images, `compose.prod.yml` behind nginx/TLS, migrate one-shot, healthcheck-gated startup, seed command, `docs/runbook.md`, Trivy CI scan | ✅ |
 
-Phase plans and completion reports: [`docs/superpowers/plans/`](docs/superpowers/plans/).
+Phase specs, plans, and completion reports: [`docs/superpowers/specs/`](docs/superpowers/specs/) · [`docs/superpowers/plans/`](docs/superpowers/plans/).
 
 ## What works today
 
@@ -41,6 +50,12 @@ A running API where a user can:
   work experience, education, projects, and certifications.
 - **See a profile-strength score** — a deterministic 0–100 score with a per-section
   completeness map and a plain-language list of what's still missing, recomputed on every edit.
+
+…and, on top of that foundation, the full flow: **résumé upload → structured profile →
+explainable job matching → skill gaps → grounded learning roadmap → résumé/cover-letter
+tailoring → application prep → human-approval-gated email → application tracking → career
+insights** — driven end to end by the **Mana AI** agent, with a human approving every
+outbound action.
 
 Every state change and auth event is written to an append-only `audit_logs` table. Every
 request carries an `X-Request-ID`; errors are RFC 9457 `application/problem+json` with stable
