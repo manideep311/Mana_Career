@@ -7,6 +7,7 @@ x-backend-build: &backend-build
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mana}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting production}@db:5432/${POSTGRES_DB:-mana}
   REDIS_URL: redis://redis:6379/0
+  FILE_STORE_LOCAL_DIR: /app/var/files
 
 services:
   db:
@@ -53,6 +54,8 @@ services:
       - path: .env
         required: false
     environment: *backend-env
+    volumes:
+      - ./backend/var/files:/app/var/files
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,6 +79,8 @@ services:
       - path: .env
         required: false
     environment: *backend-env
+    volumes:
+      - ./backend/var/files:/app/var/files
     depends_on:
       migrate:
         condition: service_completed_successfully

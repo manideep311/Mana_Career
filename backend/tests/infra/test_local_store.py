@@ -23,6 +23,16 @@ async def test_get_missing_raises_not_found(store: LocalFileStore) -> None:
         await store.get("nope/missing.pdf")
 
 
+async def test_independent_stores_share_persisted_files(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    api_store = LocalFileStore(str(tmp_path))
+    worker_store = LocalFileStore(str(tmp_path))
+    payload = b"%PDF shared across api and worker"
+
+    await api_store.put("resumes/u1/r1.pdf", payload, content_type="application/pdf")
+
+    assert await worker_store.get("resumes/u1/r1.pdf") == payload
+
+
 @pytest.mark.parametrize("bad", ["../escape.pdf", "/abs/path.pdf", "a/../../b.pdf"])
 async def test_rejects_path_traversal(store: LocalFileStore, bad: str) -> None:
     with pytest.raises(ValueError):

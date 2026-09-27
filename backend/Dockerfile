@@ -19,7 +19,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 # App source
 COPY . .
-RUN useradd --system --uid 10001 app && chown -R app /app
+RUN useradd --system --uid 10001 app && mkdir -p /app/var/files && chown -R app /app
 USER app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app ENV=prod
 EXPOSE 8000

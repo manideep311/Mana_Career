@@ -79,7 +79,9 @@ and talks to the API same-origin through nginx.
 ## 5. Backup
 
 Two pieces of state: the `pgdata` volume (all rows) and `backend/var/files`
-(uploaded résumés, if `FILE_STORE=local`).
+(uploaded résumés, if `FILE_STORE=local`). The API and worker share this host
+directory at `/app/var/files`; the application runs as UID 10001 in both
+containers. Restrict host access because résumé files contain personal data.
 
 ```bash
 # Postgres logical dump (run on a schedule, e.g. cron @daily)
@@ -100,7 +102,42 @@ tar xzf files-YYYY-MM-DD.tgz
 docker compose -f compose.prod.yml up -d
 ```
 
-## 7. Upgrade & rollback
+## 7. Move existing uploads to the shared host directory
+
+Do this once before deploying the Compose file with the bind mount. The old
+containers may hold uploads only in the API container's writable layer. Stop
+both writers, copy from the API container to a staging directory, and verify
+the copy before moving it into the mount source. Do not start the new stack if
+the checks differ.
+
+```bash
+# Record a source manifest while the API container is still running.
+docker compose -f compose.prod.yml exec -T api sh -c \
+  'cd /app/var/files && find . -type f -print0 | sort -z | xargs -0 -r sha256sum' > /tmp/files-source.sha256
+
+# Stop writes, copy from the old API container, and compare before switching.
+docker compose -f compose.prod.yml stop api worker
+mkdir -p backend/var/files.stage
+docker compose -f compose.prod.yml cp api:/app/var/files/. backend/var/files.stage/
+tar czf "files-pre-mount-$(date +%F).tgz" -C backend/var/files.stage .
+(cd backend/var/files.stage && find . -type f -print0 | sort -z | xargs -0 -r sha256sum) > /tmp/files-stage.sha256
+test "$(wc -l < /tmp/files-source.sha256)" -eq "$(wc -l < /tmp/files-stage.sha256)"
+diff -u /tmp/files-source.sha256 /tmp/files-stage.sha256
+
+mkdir -p backend/var/files
+test -z "$(find backend/var/files -mindepth 1 -print -quit)"
+cp -a backend/var/files.stage/. backend/var/files/
+sudo chown -R 10001:10001 backend/var/files
+sudo chmod -R u=rwX,go= backend/var/files
+rm -rf backend/var/files.stage
+docker compose -f compose.prod.yml up -d
+```
+
+Confirm the API and worker can read the same test upload before resuming normal
+traffic. Keep the archive in the protected backup location; it contains
+personal data.
+
+## 8. Upgrade & rollback
 
 **Upgrade:** `git pull` -> `docker compose -f compose.prod.yml build` ->
 `docker compose -f compose.prod.yml run --rm migrate` ->
@@ -113,14 +150,14 @@ docker compose -f compose.prod.yml up -d
   (or `alembic downgrade <rev>`). Restore from a dump if a migration was
   destructive.
 
-## 8. TLS in production
+## 9. TLS in production
 
 Replace `deploy/nginx/certs/{fullchain.pem,privkey.pem}` with your CA-issued
 chain and key (same filenames), then `docker compose -f compose.prod.yml
 restart nginx`. For automatic renewal, terminate TLS at an upstream load
 balancer or add an ACME sidecar — out of scope here (single-tenant portfolio).
 
-## 9. Out of scope (see the Phase 14 spec §3)
+## 10. Out of scope (see the Phase 14 spec §3)
 
 Kubernetes/Helm, cloud IaC, managed Postgres/Redis, a CDN, ACME automation,
 multi-node/HA, secret managers, log shipping/APM, pushing images to a registry,
