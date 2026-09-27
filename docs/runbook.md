@@ -27,6 +27,8 @@ cp .env.example .env
 #     ENV=prod
 #     JWT_SECRET=$(openssl rand -hex 32)
 #     POSTGRES_PASSWORD=<a real secret>
+#     PROXY_SUBNET=172.30.0.0/24
+#     NGINX_PROXY_IP=172.30.0.2
 #     REFRESH_COOKIE_SECURE=true
 #     LLM_PROVIDER=anthropic   + ANTHROPIC_API_KEY=...      (or leave fake)
 #     EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...        (or leave fake)
@@ -64,6 +66,20 @@ curl -sk https://localhost/health/ready | jq  # {"status":"ready","checks":{...}
 
 Open `https://localhost/` (accept the self-signed warning) — the app shell loads
 and talks to the API same-origin through nginx.
+
+The API has no published host port. Production Compose separates the `data`
+bridge (database, Redis, migration job, worker) from `ingress` (frontend and
+nginx); the API joins both. Nginx is assigned `NGINX_PROXY_IP` on
+`PROXY_SUBNET`, and Uvicorn trusts forwarded headers only from that exact IP.
+Nginx overwrites `X-Forwarded-For` using its direct socket peer. This assumes
+nginx receives public traffic directly. If an upstream load balancer is added,
+configure its trusted proxy chain explicitly before relying on client IPs.
+
+Defaults are `PROXY_SUBNET=172.30.0.0/24` and `NGINX_PROXY_IP=172.30.0.2`.
+Check that the subnet does not overlap the host LAN, VPN, or another Docker
+network. If it does, choose a non-overlapping bridge CIDR and an unused address
+inside it, then update both environment values together. Do not configure
+Uvicorn to trust every peer or the entire bridge subnet.
 
 ## 4. Routine operations
 

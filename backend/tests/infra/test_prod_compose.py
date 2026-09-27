@@ -19,6 +19,8 @@ def _compose_config(tmp_path: Path, *, password: str | None) -> subprocess.Compl
     empty_env.write_text("", encoding="utf-8")
     env = os.environ.copy()
     env.pop("POSTGRES_PASSWORD", None)
+    env.pop("PROXY_SUBNET", None)
+    env.pop("NGINX_PROXY_IP", None)
     if password is not None:
         env["POSTGRES_PASSWORD"] = password
     return subprocess.run(  # noqa: S603 - fixed Docker Compose CLI arguments; no shell
@@ -64,3 +66,23 @@ def test_api_and_worker_mount_the_same_persistent_file_directory(tmp_path: Path)
         assert service["environment"]["FILE_STORE_LOCAL_DIR"] == "/app/var/files"
     assert mounts["api"] == mounts["worker"]
     assert "/app/var/files" in mounts["api"]
+
+
+def test_prod_compose_limits_forwarded_ip_trust_to_nginx(tmp_path: Path) -> None:
+    result = _compose_config(tmp_path, password="test-only-password")
+    if result.returncode != 0:
+        pytest.skip(f"Docker Compose config unavailable: {result.stderr}")
+
+    config = json.loads(result.stdout)
+    services = config["services"]
+    assert set(services["api"]["networks"]) == {"data", "ingress"}
+    assert set(services["db"]["networks"]) == {"data"}
+    assert set(services["redis"]["networks"]) == {"data"}
+    assert set(services["worker"]["networks"]) == {"data"}
+    assert set(services["frontend"]["networks"]) == {"ingress"}
+    assert set(services["nginx"]["networks"]) == {"ingress"}
+    nginx_network = services["nginx"]["networks"]["ingress"]
+    assert nginx_network["ipv4_address"] == "172.30.0.2"
+    assert "--forwarded-allow-ips=172.30.0.2" in services["api"]["command"]
+    assert "ports" not in services["api"]
+    assert config["networks"]["ingress"]["ipam"]["config"][0]["subnet"] == "172.30.0.0/24"
