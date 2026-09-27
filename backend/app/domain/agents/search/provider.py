@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Protocol, TypedDict
+from typing import NotRequired, Protocol, TypedDict
 
 
 class SearchHit(TypedDict):
     url: str
     title: str
     content: str
+    published_date: NotRequired[str | None]
+    retrieved_at: NotRequired[str]
 
 
 class SearchProvider(Protocol):

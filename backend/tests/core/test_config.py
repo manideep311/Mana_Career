@@ -85,9 +85,18 @@ def test_prod_rejects_unsafe_jwt_secret(monkeypatch: pytest.MonkeyPatch, secret:
 
 def test_prod_accepts_32_character_jwt_secret(monkeypatch: pytest.MonkeyPatch):
     secret = "x" * 32
-    for key, value in _env(ENV="prod", JWT_SECRET=secret).items():
+    for key, value in _env(
+        ENV="prod", JWT_SECRET=secret, SEARCH_PROVIDER="tavily", SEARCH_API_KEY="test-key"
+    ).items():
         monkeypatch.setenv(key, value)
     assert Settings().jwt_secret.get_secret_value() == secret
+
+
+def test_prod_rejects_fake_search_provider(monkeypatch: pytest.MonkeyPatch):
+    for key, value in _env(ENV="prod", JWT_SECRET="x" * 32).items():
+        monkeypatch.setenv(key, value)
+    with pytest.raises(ValidationError, match="SEARCH_PROVIDER=tavily"):
+        Settings()
 
 
 def test_dev_still_accepts_development_jwt_secret(monkeypatch: pytest.MonkeyPatch):

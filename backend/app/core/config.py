@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     voyage_api_key: SecretStr | None = None
     embed_dim: int = 1024
 
-    search_provider: Literal["fake", "tavily", "brave"] = "fake"
+    search_provider: Literal["fake", "tavily"] = "fake"
     search_api_key: SecretStr | None = None
     doc_render_enabled: bool = True
     email_provider: str = "console"
@@ -63,6 +63,11 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "JWT_SECRET must be a non-development secret of at least 32 characters"
                 )
+            if self.search_provider != "tavily":
+                raise ValueError("Production requires SEARCH_PROVIDER=tavily")
+        if self.search_provider == "tavily":
+            if self.search_api_key is None or not self.search_api_key.get_secret_value().strip():
+                raise ValueError("SEARCH_API_KEY is required when SEARCH_PROVIDER=tavily")
         return self
 
     @field_validator("cors_origins", mode="before")

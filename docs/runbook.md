@@ -30,6 +30,7 @@ cp .env.example .env
 #     PROXY_SUBNET=172.30.0.0/24
 #     NGINX_PROXY_IP=172.30.0.2
 #     REFRESH_COOKIE_SECURE=true
+#     SEARCH_PROVIDER=tavily + SEARCH_API_KEY=...               (required in production)
 #     LLM_PROVIDER=anthropic   + ANTHROPIC_API_KEY=...      (or leave fake)
 #     EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...        (or leave fake)
 
@@ -64,8 +65,22 @@ docker compose -f compose.prod.yml ps        # every service "healthy" / migrate
 curl -sk https://localhost/health/ready | jq  # {"status":"ready","checks":{...}}
 ```
 
+The default `smoke-prod.sh` run checks HTTP health and does not write application
+data. Set `SMOKE_UPLOAD_PERSISTENCE=1` only on a disposable stack to also create
+a synthetic account and résumé, restart API and worker, and verify the file
+remains readable. That extended check leaves its account and uploaded test file
+in the database and file store; CI removes them with the disposable stack.
+
 Open `https://localhost/` (accept the self-signed warning) — the app shell loads
 and talks to the API same-origin through nginx.
+
+Production settings reject the offline fictional search provider. Configure a
+Tavily API key before starting the API and worker; search results include source
+URLs, provider publication dates when available, and the retrieval timestamp.
+An unknown publication date is preserved as unknown rather than presented as
+fresh evidence. Provider throttling and transient server errors get bounded
+retries; a provider outage yields an unavailable research result without
+substituting fabricated search hits.
 
 The API has no published host port. Production Compose separates the `data`
 bridge (database, Redis, migration job, worker) from `ingress` (frontend and

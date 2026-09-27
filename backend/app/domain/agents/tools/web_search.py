@@ -23,6 +23,25 @@ async def web_search(
     out: list[dict[str, Any]] = []
     for i, h in enumerate(hits):
         body = _neutralize(h["content"])[:1200]
-        fenced = _FENCE.format(ref=f"web:{i}", body=body)
-        out.append({"ref": f"web:{i}", "url": h["url"], "title": h["title"], "fenced": fenced})
+        source = _neutralize(
+            "\n".join(
+                (
+                    f"Title: {h['title']}",
+                    f"URL: {h['url']}",
+                    f"Published: {h.get('published_date') or 'unknown'}",
+                    f"Retrieved: {h.get('retrieved_at') or 'unknown'}",
+                )
+            )
+        )[:600]
+        fenced = _FENCE.format(ref=f"web:{i}", body=f"{source}\n\n{body}")
+        out.append(
+            {
+                "ref": f"web:{i}",
+                "url": h["url"],
+                "title": h["title"],
+                "published_date": h.get("published_date"),
+                "retrieved_at": h.get("retrieved_at"),
+                "fenced": fenced,
+            }
+        )
     return out

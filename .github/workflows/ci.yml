@@ -177,7 +177,7 @@ jobs:
           echo "stack did not become ready in 180s"; exit 1
 
       - name: Smoke
-        run: ./scripts/smoke-prod.sh
+        run: SMOKE_UPLOAD_PERSISTENCE=1 ./scripts/smoke-prod.sh
 
       - name: Dump logs on failure
         if: failure()

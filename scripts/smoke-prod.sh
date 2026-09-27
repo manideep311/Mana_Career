@@ -33,6 +33,13 @@ case "$redirect" in
   *) fail "http:// not redirected to https (got: $redirect)" ;;
 esac
 
+# Keep the upload/restart exercise opt-in because it creates persistent test
+# data. CI enables this only for its disposable stack.
+if [ "${SMOKE_UPLOAD_PERSISTENCE:-0}" != "1" ]; then
+  echo "SMOKE OK (HTTP checks; upload persistence skipped)"
+  exit 0
+fi
+
 # 7. Exercise the shared API/worker file store with a synthetic PDF. Keep the
 # persisted upload: production smoke runs must not remove application data.
 tmpdir=$(mktemp -d)

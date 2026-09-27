@@ -93,4 +93,6 @@ full procedure (certs, backup, restore, rollback) in
 
 Before running production Compose commands, set a nonempty generated
 `POSTGRES_PASSWORD` and replace the development `JWT_SECRET` with a secret of at
-least 32 characters.
+least 32 characters. Production also requires `SEARCH_PROVIDER=tavily` and a
+valid `SEARCH_API_KEY`; the fictional offline search provider is limited to
+development and tests.
