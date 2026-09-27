@@ -90,3 +90,7 @@ behind an nginx reverse proxy with TLS, a one-shot Alembic `migrate` service,
 and healthcheck-gated startup. `just prod-up` / `just seed` / `just smoke-prod`;
 full procedure (certs, backup, restore, rollback) in
 [`docs/runbook.md`](docs/runbook.md).
+
+Before running production Compose commands, set a nonempty generated
+`POSTGRES_PASSWORD` and replace the development `JWT_SECRET` with a secret of at
+least 32 characters.

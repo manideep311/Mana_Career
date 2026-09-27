@@ -1,5 +1,5 @@
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings, get_settings
 
@@ -73,3 +73,24 @@ def test_resume_and_filestore_defaults(monkeypatch: pytest.MonkeyPatch):
     assert s.resume_max_pages == 15
     assert s.llm_model_extraction == "claude-haiku-4-5-20251001"
     assert s.upload_limit_per_hour == 20
+
+@pytest.mark.parametrize("secret", ["dev-only-change-me", "x" * 31])
+def test_prod_rejects_unsafe_jwt_secret(monkeypatch: pytest.MonkeyPatch, secret: str):
+    for key, value in _env(ENV="prod", JWT_SECRET=secret).items():
+        monkeypatch.setenv(key, value)
+    with pytest.raises(ValidationError) as exc:
+        Settings()
+    assert secret not in str(exc.value)
+
+
+def test_prod_accepts_32_character_jwt_secret(monkeypatch: pytest.MonkeyPatch):
+    secret = "x" * 32
+    for key, value in _env(ENV="prod", JWT_SECRET=secret).items():
+        monkeypatch.setenv(key, value)
+    assert Settings().jwt_secret.get_secret_value() == secret
+
+
+def test_dev_still_accepts_development_jwt_secret(monkeypatch: pytest.MonkeyPatch):
+    for key, value in _env(ENV="dev", JWT_SECRET="dev-only-change-me").items():
+        monkeypatch.setenv(key, value)
+    assert Settings().jwt_secret.get_secret_value() == "dev-only-change-me"

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     resume_parser: Literal["pdfium", "pypdf"] = "pdfium"
     llm_model_extraction: str = "claude-haiku-4-5-20251001"
     anthropic_model_fallback: str = "claude-sonnet-5"
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self) -> Self:
+        if self.env == "prod":
+            secret = self.jwt_secret.get_secret_value()
+            if secret.startswith("dev-only-") or len(secret) < 32:
+                raise ValueError(
+                    "JWT_SECRET must be a non-development secret of at least 32 characters"
+                )
+        return self
 
     @field_validator("cors_origins", mode="before")
     @classmethod

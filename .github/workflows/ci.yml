@@ -120,6 +120,11 @@ jobs:
       - name: Seed a dev .env for the smoke
         run: cp .env.example .env
 
+      - name: Seed CI-only production secrets
+        run: |
+          sed -i 's/^JWT_SECRET=.*/JWT_SECRET=ci-only-jwt-secret-that-is-never-used-outside-ci/' .env
+          sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-only-postgres-password/' .env
+
       - name: Generate a throwaway self-signed cert
         run: |
           mkdir -p deploy/nginx/certs

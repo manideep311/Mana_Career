@@ -5,7 +5,7 @@ x-backend-build: &backend-build
   target: prod
 
 x-backend-env: &backend-env
-  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mana}:${POSTGRES_PASSWORD:-mana}@db:5432/${POSTGRES_DB:-mana}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mana}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting production}@db:5432/${POSTGRES_DB:-mana}
   REDIS_URL: redis://redis:6379/0
 
 services:
@@ -13,7 +13,7 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mana}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mana}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting production}
       POSTGRES_DB: ${POSTGRES_DB:-mana}
     volumes:
       - pgdata:/var/lib/postgresql/data
