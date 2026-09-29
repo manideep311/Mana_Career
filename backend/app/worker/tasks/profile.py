@@ -11,7 +11,7 @@ from app.core.db import AsyncSessionLocal
 from app.core.logging import get_logger
 from app.domain.profile.builder import ProfileBuilder
 from app.worker.dead_letter import record_failure
-from app.worker.tasks.resume import MAX_TRIES
+from app.worker.retry import retry_or_fail
 
 __all__ = ["build_profile"]
 
@@ -52,7 +52,6 @@ async def build_profile(ctx: dict[str, Any], user_id: str) -> dict[str, Any]:
             }
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise  # transient — let ARQ retry, don't dead-letter yet
+            retry_or_fail(ctx, exc, task="build_profile")
             await record_failure("build_profile", args=(user_id,), kwargs={}, error=exc)
             raise

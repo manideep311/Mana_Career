@@ -30,7 +30,7 @@ from app.domain.rag.types import RetrievalSource
 from app.models.job import Job
 from app.models.match import JobMatch
 from app.worker.dead_letter import record_failure
-from app.worker.tasks.resume import MAX_TRIES
+from app.worker.retry import retry_or_fail
 
 __all__ = ["score_match"]
 
@@ -156,8 +156,7 @@ async def score_match(ctx: dict[str, Any], job_match_id: str) -> dict[str, Any]:
             }
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise  # transient — let ARQ retry, don't surface a terminal failure
+            retry_or_fail(ctx, exc, task="score_match")
             m = await session.get(JobMatch, uuid.UUID(job_match_id))
             if m is not None:
                 await MatchService(session).mark_failed(

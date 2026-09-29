@@ -43,7 +43,7 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
 ## Workstreams
 
 - [x] A. Config & JWT hardening (R3, R4, provider validation, R1, R2)
-- [ ] B. Worker retry/backoff/final-failure + stuck-job sweeper (R10) + real-ARQ tests
+- [x] B. Worker retry/backoff/final-failure + stuck-job sweeper (R10) + real-ARQ tests
 - [ ] C. Sessions: refresh race (FOR UPDATE + grace), `sid`/`iss`/`aud`, revocation (R5)
 - [ ] D. Rate limiter (R8) + client-IP helper
 - [ ] E. Upload body guard (R9)
@@ -66,3 +66,11 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
   secure cookie, explicit CORS, real providers or DEMO_MODE; providers narrowed to shipped adapters;
   SEARCH_PROVIDER=none default; /api/v1/meta; API schema/docs off in prod; compose forces ENV=prod and
   requires JWT_SECRET; init-env script; LocalFileStore resolved-path guard.
+- 8af5e5b CI green (all 4 jobs, incl. images + upload-persistence smoke).
+- Workstream B: app/worker/retry.py (Retry w/ 5/10/20s backoff, permanent errors fail fast, LLM
+  upstream errors stay retryable) wired into all 6 entry points; sweeper cron (every 5 min, 20 min
+  staleness, SKIP LOCKED, awaiting_approval never swept); worker heartbeat (health_check_interval=30).
+  Tests: retry policy units; real ARQ worker semantics (plain raise never retried; Retry is; max tries;
+  permanent); parse_resume Retry/terminal/permanent + real-worker retry to 'parsed'; score_match
+  retry/terminal/recovery; sweeper; agent-limits test now asserts Retry. Finding: 'preparing'
+  applications never exist (prep node creates the row as awaiting_approval) — nothing to release.

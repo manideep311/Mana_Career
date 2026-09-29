@@ -3,7 +3,7 @@ import decimal
 
 from sqlalchemy import select
 
-from app.domain.matching.scorer import inputs_hash
+from app.domain.matching.scorer import inputs_hash, score
 from app.domain.matching.service import MatchService
 from app.models.job import Job, JobChunk
 from app.models.match import MatchComponent
@@ -100,3 +100,66 @@ async def test_score_match_skips_when_inputs_hash_matches(db_session, monkeypatc
 
     out = await score_match({}, str(m.id))
     assert out["status"] == "skipped"
+
+
+# --------------------------------------------------------------------------- #
+# Retry and terminal state (the scorer is patched to fail transiently)
+# --------------------------------------------------------------------------- #
+import pytest  # noqa: E402
+from arq.worker import Retry  # noqa: E402
+
+from app.models.match import JobMatch  # noqa: E402
+from app.worker.retry import MAX_TRIES  # noqa: E402
+
+
+async def _seed_match(db_session, monkeypatch, email):
+    monkeypatch.setattr("app.worker.tasks.matching._session_for", lambda: _ctx(db_session))
+    u, _p, _s, j = await _seed(db_session, email=email)
+    m = await MatchService(db_session).get_or_create(u.id, j.id)
+    mid = m.id
+    await db_session.commit()  # survive the task's rollback on error
+    return mid
+
+
+async def _match_status(db_session, mid) -> str:
+    db_session.expire_all()
+    row = (await db_session.execute(select(JobMatch).where(JobMatch.id == mid))).scalar_one()
+    return row.status
+
+
+async def test_transient_scoring_error_is_retried_not_left_scoring(db_session, monkeypatch):
+    mid = await _seed_match(db_session, monkeypatch, "mt-retry@x.com")
+
+    def _boom(*args, **kwargs):
+        raise ConnectionResetError("database connection reset")
+
+    monkeypatch.setattr("app.worker.tasks.matching.score", _boom)
+
+    with pytest.raises(Retry) as retry:
+        await score_match({"job_try": 1}, str(mid))
+    assert isinstance(retry.value.__cause__, ConnectionResetError)
+    assert await _match_status(db_session, mid) == "scoring"
+
+    with pytest.raises(ConnectionResetError):
+        await score_match({"job_try": MAX_TRIES}, str(mid))
+    assert await _match_status(db_session, mid) == "failed"
+
+
+async def test_match_recovers_on_a_later_attempt(db_session, monkeypatch):
+    mid = await _seed_match(db_session, monkeypatch, "mt-recover@x.com")
+    real_score = score
+    calls = {"n": 0}
+
+    def _flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectionResetError("transient")
+        return real_score(*args, **kwargs)
+
+    monkeypatch.setattr("app.worker.tasks.matching.score", _flaky)
+
+    with pytest.raises(Retry):
+        await score_match({"job_try": 1}, str(mid))
+    out = await score_match({"job_try": 2}, str(mid))
+    assert out["status"] == "ready"
+    assert await _match_status(db_session, mid) == "ready"

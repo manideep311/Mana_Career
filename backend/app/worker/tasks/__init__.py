@@ -5,6 +5,7 @@ from app.worker.tasks.ping import ping
 from app.worker.tasks.profile import build_profile
 from app.worker.tasks.resume import extract_resume, parse_resume
 from app.worker.tasks.roadmap import plan_roadmap
+from app.worker.tasks.sweeper import sweep_stuck_jobs
 
 __all__ = [
     "build_profile",
@@ -16,4 +17,5 @@ __all__ = [
     "resume_agent",
     "run_agent",
     "score_match",
+    "sweep_stuck_jobs",
 ]

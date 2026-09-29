@@ -19,12 +19,13 @@ Prior coverage this module deliberately re-asserts from the security angle:
   asserts the dimension it cannot: a real ``prepare_application`` run seeded
   with a tiny ``budget.max_steps`` halts end-to-end instead of running the full
   chain to a send.
-* ``_run_or_resume`` has two failure branches: transient
-  (``if ctx["job_try"] < MAX_TRIES: raise`` -- ARQ retries) and terminal.
+* ``_run_or_resume`` has two failure branches: transient (raises
+  ``arq.worker.Retry`` so ARQ re-queues the job) and terminal.
   ``test_flaky_node_finalizes_as_error_after_max_tries`` drives both: a
-  ``job_try < MAX_TRIES`` call re-raises WITHOUT finalizing; a
-  ``job_try == MAX_TRIES`` call finalizes the session ``error`` and re-raises
-  once -- the call returns, no infinite loop.
+  non-final attempt raises ``Retry`` WITHOUT finalizing; the final attempt
+  finalizes the session ``error`` and re-raises once -- no infinite loop.
+  (``tests/worker/test_arq_retry_semantics.py`` proves with a real ARQ worker
+  that ``Retry`` -- and only ``Retry`` -- makes ARQ run a job again.)
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from arq.worker import Retry
 from sqlalchemy import select
 
 from app.domain.agents.graph import build_graph
@@ -44,8 +46,8 @@ from app.models.application import Application, ApplicationEmail, ApprovalReques
 from app.models.job import Job
 from app.models.resume import Resume
 from app.models.user import User
+from app.worker.retry import MAX_TRIES
 from app.worker.tasks.agent import resume_agent, run_agent
-from app.worker.tasks.resume import MAX_TRIES
 
 SEND_NODE = "email_external_action"
 GATE_NODE = "human_approval"
@@ -253,8 +255,8 @@ async def test_flaky_node_finalizes_as_error_after_max_tries(
     db_session, monkeypatch, fake_redis
 ) -> None:
     """DB-gated. Monkeypatch the raw ``supervisor`` node to always raise. With
-    ``ctx["job_try"] < MAX_TRIES`` the transient branch re-raises WITHOUT
-    finalizing (ARQ would retry); with ``ctx["job_try"] == MAX_TRIES`` the
+    ``ctx["job_try"] < MAX_TRIES`` the transient branch raises ARQ's ``Retry``
+    WITHOUT finalizing; with ``ctx["job_try"] == MAX_TRIES`` the
     retry budget is spent, so ``_run_or_resume`` finalizes the session
     ``status="error"``, records the dead-letter, and re-raises once -- the call
     returns rather than looping."""
@@ -272,9 +274,10 @@ async def test_flaky_node_finalizes_as_error_after_max_tries(
     # does not discard it (see ``_session_for``'s docstring for the seam).
     await db_session.commit()
 
-    # transient try: re-raises, session left untouched ("running", not finalized)
-    with pytest.raises(RuntimeError, match="flaky supervisor"):
+    # transient try: ARQ Retry (chained to the real error), session untouched
+    with pytest.raises(Retry) as retry:
         await run_agent({"job_try": 1}, run_id)
+    assert isinstance(retry.value.__cause__, RuntimeError)
     session_row = (
         await db_session.execute(select(AiSession).where(AiSession.run_id == run_id))
     ).scalar_one()

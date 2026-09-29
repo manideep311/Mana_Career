@@ -40,7 +40,7 @@ from app.domain.embeddings.factory import get_embeddings_provider
 from app.domain.llm.factory import get_llm_provider
 from app.models.ai import AiSession
 from app.worker.dead_letter import record_failure
-from app.worker.tasks.resume import MAX_TRIES
+from app.worker.retry import retry_or_fail
 
 __all__ = ["resume_agent", "run_agent"]
 
@@ -157,8 +157,7 @@ async def _run_or_resume(
             )
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise
+            retry_or_fail(ctx, exc, task="run_agent")
             s2 = (
                 await session.execute(select(AiSession).where(AiSession.run_id == run_id))
             ).scalar_one_or_none()

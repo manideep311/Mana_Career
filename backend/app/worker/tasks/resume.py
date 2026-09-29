@@ -22,9 +22,7 @@ from app.domain.resume.parser import (
 from app.infra.storage.factory import get_file_store
 from app.models.resume import Resume
 from app.worker.dead_letter import record_failure
-
-# Keep in sync with ``WorkerSettings.max_tries`` (app/worker/main.py imports this).
-MAX_TRIES = 3
+from app.worker.retry import MAX_TRIES, retry_or_fail
 
 __all__ = ["MAX_TRIES", "extract_resume", "parse_resume"]
 
@@ -132,15 +130,13 @@ async def parse_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
             return {"resume_id": resume_id, "status": "parsed"}
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise  # let ARQ retry; don't surface a terminal failure on a transient error
+            retry_or_fail(ctx, exc, task="parse_resume")
             resume = await session.get(Resume, rid)
             if resume is not None:
                 resume.status = "failed"
                 resume.parse_error = "We couldn't read this file."
                 await session.commit()
-            # A Redis outage here must not swallow the dead-letter record or the
-            # re-raise that drives ARQ's retry.
+            # A Redis outage here must not swallow the dead-letter record.
             with contextlib.suppress(Exception):
                 await publish_status(
                     redis,
@@ -206,15 +202,13 @@ async def extract_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
             return {"resume_id": resume_id, "status": "extracted"}
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise  # let ARQ retry; don't surface a terminal failure on a transient error
+            retry_or_fail(ctx, exc, task="extract_resume")
             resume = await session.get(Resume, rid)
             if resume is not None:
                 resume.status = "failed"
                 resume.parse_error = "We couldn't understand this résumé. Try re-uploading."
                 await session.commit()
-            # A Redis outage here must not swallow the dead-letter record or the
-            # re-raise that drives ARQ's retry.
+            # A Redis outage here must not swallow the dead-letter record.
             with contextlib.suppress(Exception):
                 await publish_status(
                     redis,

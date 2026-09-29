@@ -21,7 +21,7 @@ from app.domain.llm.factory import get_llm_provider
 from app.domain.skills.normalizer import SkillNormalizer
 from app.models.job import Job
 from app.worker.dead_letter import record_failure
-from app.worker.tasks.resume import MAX_TRIES
+from app.worker.retry import retry_or_fail
 
 __all__ = ["ingest_job"]
 
@@ -224,15 +224,13 @@ async def ingest_job(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
             return {"job_id": job_id, "status": "ready"}
         except Exception as exc:
             await session.rollback()
-            if ctx.get("job_try", 1) < MAX_TRIES:
-                raise  # transient — let ARQ retry, don't surface a terminal failure
+            retry_or_fail(ctx, exc, task="ingest_job")
             job = await session.get(Job, jid)
             if job is not None:
                 job.status = "failed"
                 job.ingest_error = "We couldn't read this job posting."
                 await session.commit()
-            # A Redis outage here must not swallow the dead-letter record or the
-            # re-raise that drives ARQ's retry.
+            # A Redis outage here must not swallow the dead-letter record.
             with contextlib.suppress(Exception):
                 await publish_status(
                     redis, channel, resource="job", id=job_id,
