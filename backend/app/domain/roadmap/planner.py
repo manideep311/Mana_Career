@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.domain.career.skill_plan import practice_project
 from app.domain.embeddings.provider import EmbeddingsProvider
 from app.domain.llm.provider import LLMMessage, LLMProvider
+from app.domain.skills.scanner import load_taxonomy
 from app.models.learning import LearningRecommendation, LearningResource, RoadmapMilestone
 from app.models.match import SkillGap
 
@@ -28,6 +30,29 @@ class MilestoneDraft(BaseModel):
     est_hours: int = Field(default=8, ge=0, le=400)
     practice_project: str = Field(default="", max_length=400)
     checkpoint: str = Field(default="", max_length=400)
+
+
+def _template_draft(
+    gap: SkillGap, resources: list[LearningResource], category: str
+) -> MilestoneDraft:
+    """A milestone written from stored facts alone, used when no model draft is
+    available (demo mode, or the model call failed). Every claim in it comes
+    from the gap row or the catalogue: nothing is invented."""
+    roles = f"{gap.frequency} of your job matches"
+    usually = ", usually as a requirement" if gap.severity == "critical" else ""
+    hours = next((r.est_hours for r in resources if r.est_hours), 8)
+    return MilestoneDraft(
+        why_it_matters=(
+            f"{gap.skill_label} comes up in {roles}{usually}. Showing real work with it "
+            "widens the roles you can apply for with confidence."
+        ),
+        est_hours=max(1, min(hours, 200)),
+        practice_project=practice_project(gap.skill_label, category),
+        checkpoint=(
+            f"The project is finished and shareable, and you can explain in two minutes "
+            f"how you used {gap.skill_label} and what you would do differently."
+        ),
+    )
 
 
 def _milestone_payload(m: RoadmapMilestone) -> dict[str, Any]:
@@ -70,12 +95,17 @@ class RoadmapPlanner:
 
         try:
             gaps = await self._top_gaps(user_id)
+            categories = {s.slug: s.category for s in load_taxonomy()}
+            drafted_by = {"model": 0, "template": 0}
             n = 0
             for gap in gaps:
                 resources = await self._retrieve(gap)
                 draft = await self._draft(gap, resources, constraints)
                 if draft is None:
-                    continue
+                    draft = _template_draft(gap, resources, categories.get(gap.skill_slug, ""))
+                    drafted_by["template"] += 1
+                else:
+                    drafted_by["model"] += 1
                 ms = RoadmapMilestone(
                     recommendation_id=rec.id, user_id=user_id, order_index=n,
                     skill_id=gap.skill_id, skill_slug=gap.skill_slug,
@@ -92,7 +122,8 @@ class RoadmapPlanner:
                 await publish({"event": "milestone", "milestone": _milestone_payload(ms)})
 
             rec.status = "active"
-            rec.summary = f"{n} milestones to close your top skill gaps."
+            rec.summary = f"{n} milestone{'s' if n != 1 else ''} to close your top skill gaps."
+            rec.generation_meta = {**rec.generation_meta, "drafted_by": drafted_by}
             first = (
                 await self._session.execute(
                     select(RoadmapMilestone)

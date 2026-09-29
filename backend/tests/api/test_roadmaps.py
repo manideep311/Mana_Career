@@ -143,6 +143,9 @@ async def test_list_get_and_patches(client, db_session):
     assert body["milestones"][0]["resource_ids"] == [
         str(rid) for rid in milestone.resource_ids
     ]
+    # The only open milestone is the current one; phases assume the default pace.
+    assert body["milestones"][0]["phase"] == "current"
+    assert body["hours_per_week"] == 5
 
     archived = await client.patch(
         f"/api/v1/roadmaps/{rec.id}", headers=h, json={"status": "archived"}

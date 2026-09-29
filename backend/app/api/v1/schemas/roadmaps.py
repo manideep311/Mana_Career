@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,10 +43,14 @@ class MilestoneOut(BaseModel):
     checkpoint: str | None
     status: str
     completed_at: dt.datetime | None
+    # Where it sits on the timeline; only set on the full roadmap view.
+    phase: Literal["done", "current", "next_30", "next_60_90", "later"] | None = None
 
 
 class RoadmapDetailOut(RoadmapOut):
     milestones: list[MilestoneOut]
+    # The weekly pace the phases assume, so the UI can say so.
+    hours_per_week: int
 
 
 class RoadmapListOut(BaseModel):

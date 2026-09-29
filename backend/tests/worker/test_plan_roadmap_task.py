@@ -5,8 +5,8 @@ seeds a ``status='planning'`` recommendation plus one open aggregate skill gap,
 runs the task with a fake Redis that records every published frame and a
 session seam pinned to the rolled-back test session, then asserts the
 recommendation reached ``status='active'`` and a terminal ``done`` frame landed
-on ``sse:roadmap:{rec_id}``. With ``LLM_PROVIDER=fake`` every milestone draft is
-empty and dropped, so the roadmap lands with 0 milestones but still activates.
+on ``sse:roadmap:{rec_id}``. With ``LLM_PROVIDER=fake`` the model drafts are
+empty, so each milestone is written from the stored gap by the template fallback.
 """
 from __future__ import annotations
 
@@ -111,5 +111,7 @@ async def test_plan_roadmap_activates_and_publishes_done(db_session, monkeypatch
     assert done[-1]["status"] == "active"
     assert done[-1]["id"] == str(rec.id)
 
-    # The fake LLM yields empty drafts, so every milestone is dropped.
-    assert [f for _ch, f in redis.frames if f.get("event") == "milestone"] == []
+    # The fake LLM yields empty drafts, so the template fallback writes the milestone.
+    milestones = [f for _ch, f in redis.frames if f.get("event") == "milestone"]
+    assert [f["milestone"]["skill_slug"] for f in milestones] == ["kubernetes"]
+    assert refreshed.generation_meta["drafted_by"] == {"model": 0, "template": 1}

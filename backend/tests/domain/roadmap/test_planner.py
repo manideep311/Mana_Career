@@ -1,9 +1,9 @@
 """RoadmapPlanner -- DB integration, CI-deferred.
 
 Asserts the planning->active transition and the publish frame sequence. With
-``LLM_PROVIDER=fake`` every milestone draft comes back empty and is dropped, so
-the roadmap lands with 0 milestones but still reaches ``status='active'`` and a
-terminal ``{"event": "done"}`` frame.
+``LLM_PROVIDER=fake`` every model draft comes back empty, so each milestone is
+written by the deterministic template from the stored gap and catalogue, and the
+roadmap still reaches ``status='active'`` with a terminal ``done`` frame.
 """
 from __future__ import annotations
 
@@ -96,8 +96,13 @@ async def test_plan_transitions_planning_to_active_and_publishes_done(db_session
     assert frames[-1]["status"] == "active"
     assert frames[-1]["id"] == str(rec.id)
 
-    # The fake LLM yields empty drafts, so every milestone is dropped.
+    # The fake LLM yields empty drafts, so the template writes the milestone.
     milestone_frames = [f for f in frames if f["event"] == "milestone"]
-    assert milestone_frames == []
-    assert refreshed.summary == "0 milestones to close your top skill gaps."
-    assert refreshed.next_step is None
+    assert len(milestone_frames) == 1
+    ms = milestone_frames[0]["milestone"]
+    assert ms["skill_slug"] == "kubernetes"
+    assert "2 of your job matches, usually as a requirement" in ms["why_it_matters"]
+    assert "Kubernetes" in ms["practice_project"]
+    assert refreshed.summary == "1 milestone to close your top skill gaps."
+    assert refreshed.next_step == "Close your Kubernetes gap"
+    assert refreshed.generation_meta["drafted_by"] == {"model": 0, "template": 1}

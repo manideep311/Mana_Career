@@ -22,6 +22,7 @@ from app.api.v1.schemas.roadmaps import (
 from app.core.db import AsyncSessionLocal
 from app.core.errors import NotFoundError
 from app.core.events import roadmap_channel, sse_event, status_stream
+from app.domain.roadmap.phases import MilestoneTiming, assign_phases, hours_per_week
 from app.domain.roadmap.planner import _milestone_payload
 from app.domain.roadmap.service import RoadmapService
 from app.models.job import Job
@@ -86,9 +87,16 @@ async def get_roadmap(
     svc = RoadmapService(db)
     rec = await svc.get(user.id, roadmap_id)
     ms = await svc.milestones(roadmap_id)
+    weekly = hours_per_week(rec.constraints)
+    phases = assign_phases(
+        [MilestoneTiming(m.id, m.est_hours, m.status) for m in ms], weekly_hours=weekly
+    )
     return RoadmapDetailOut(
         **_roadmap_out(rec).model_dump(),
-        milestones=[_milestone_out(m) for m in ms],
+        milestones=[
+            _milestone_out(m).model_copy(update={"phase": phases.get(m.id)}) for m in ms
+        ],
+        hours_per_week=weekly,
     )
 
 

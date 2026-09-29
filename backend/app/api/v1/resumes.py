@@ -8,7 +8,9 @@ from fastapi import APIRouter, File, Response, UploadFile, status
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep
+from app.api.v1.career import analysis_out
 from app.api.v1.schemas.ai import RunRefOut
+from app.api.v1.schemas.career import ResumeAnalysisOut
 from app.api.v1.schemas.resume import (
     ConfirmProfileIn,
     FieldDeltaOut,
@@ -24,6 +26,7 @@ from app.core.db import AsyncSessionLocal
 from app.core.errors import ConflictError, NotFoundError, ValidationAppError
 from app.core.events import resume_channel, sse_event, status_stream
 from app.domain.agents.service import AgentService
+from app.domain.career.service import CareerService
 from app.domain.documents.renderer import DocumentRenderer, RenderFormat, RenderUnavailable
 from app.domain.resume.extractor import ResumeExtraction
 from app.domain.resume.service import ResumeService
@@ -136,6 +139,20 @@ async def resume_extraction(
             detail="This résumé hasn't been extracted yet.", code="resume.not_extracted"
         )
     return ResumeExtraction.model_validate(resume.extraction)
+
+
+@router.get("/{resume_id}/analysis")
+async def resume_analysis(
+    resume_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> ResumeAnalysisOut:
+    """Problem -> why it matters -> suggestion, read straight from the résumé text."""
+    resume = await ResumeService(db).get(user.id, resume_id)
+    if not resume.extracted_text:
+        raise NotFoundError(
+            detail="We haven't read this résumé yet.", code="resume.not_read"
+        )
+    analysis, direction = await CareerService(db).resume_analysis(user.id, resume)
+    return analysis_out(resume.id, analysis, direction)
 
 
 @router.patch("/{resume_id}")

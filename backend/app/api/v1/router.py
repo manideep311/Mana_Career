@@ -5,6 +5,7 @@ from app.api.v1 import (
     applications,
     approvals,
     auth,
+    career,
     eval,
     health,
     insights,
@@ -22,6 +23,7 @@ api_router.include_router(ai.router)
 api_router.include_router(health.router)
 api_router.include_router(insights.router)
 api_router.include_router(auth.router)
+api_router.include_router(career.router)
 api_router.include_router(eval.router)
 api_router.include_router(jobs.router)
 api_router.include_router(matches.router)
