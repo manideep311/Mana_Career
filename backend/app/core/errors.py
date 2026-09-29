@@ -52,6 +52,10 @@ class ConflictError(AppError):
     status, code, title = 409, "conflict", "That conflicts with existing data"
 
 
+class PayloadTooLargeError(AppError):
+    status, code, title = 413, "payload_too_large", "That's too large"
+
+
 class RateLimitedError(AppError):
     status, code, title = 429, "rate_limited", "Slow down a moment"
 
@@ -65,6 +69,7 @@ _STATUS_TO_ERROR: dict[int, type[AppError]] = {
     403: ForbiddenError,
     404: NotFoundError,
     409: ConflictError,
+    413: PayloadTooLargeError,
     422: ValidationAppError,
 }
 

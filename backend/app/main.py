@@ -10,6 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1 import health
 from app.api.v1.router import api_router
+from app.core.body_limit import MULTIPART_OVERHEAD_BYTES, BodySizeLimitMiddleware
 from app.core.config import get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging
@@ -44,7 +45,15 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs_enabled else None,
     )
     # add_middleware prepends, so the last added runs outermost:
-    # RequestID -> CORS -> RateLimit -> router.
+    # RequestID -> CORS -> RateLimit -> BodySizeLimit -> router.
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        default_limit=settings.max_request_body_bytes,
+        route_limits={
+            ("POST", f"{settings.api_base_path}/resumes"): settings.resume_max_bytes
+            + MULTIPART_OVERHEAD_BYTES,
+        },
+    )
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,

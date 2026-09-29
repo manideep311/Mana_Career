@@ -4,7 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Request, Response, UploadFile, status
+from fastapi import APIRouter, File, Response, UploadFile, status
 from sse_starlette import EventSourceResponse, ServerSentEvent
 
 from app.api.deps import CurrentUser, DbDep, RedisDep, SettingsDep
@@ -58,16 +58,16 @@ def _diff_out(d: ResumeDiff) -> ResumeDiffOut:
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def upload_resume(
-    request: Request,
     db: DbDep,
     user: CurrentUser,
     settings: SettingsDep,
     file: Annotated[UploadFile, File()],
 ) -> ResumeOut:
-    declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > settings.resume_max_bytes:
+    # BodySizeLimitMiddleware already capped the request while it streamed in;
+    # read at most one byte past the limit so this stays bounded regardless.
+    data = await file.read(settings.resume_max_bytes + 1)
+    if len(data) > settings.resume_max_bytes:
         raise ValidationAppError(code="resume.too_large")
-    data = await file.read()
     resume = await ResumeService(db, settings=settings).create(
         user.id,
         filename=file.filename or "resume.pdf",
