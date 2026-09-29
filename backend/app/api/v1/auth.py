@@ -11,7 +11,8 @@ from app.api.v1.schemas.auth import (
     RegisterIn,
     UserOut,
 )
-from app.core.config import Settings
+from app.core.client_ip import client_ip
+from app.core.config import Settings, get_settings
 from app.core.errors import AuthError
 from app.domain.auth.service import AccessResult, AuthResult, AuthService
 
@@ -19,7 +20,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _client_ip(request: Request) -> str | None:
-    return request.client.host if request.client else None
+    ip = client_ip(request, get_settings())
+    return None if ip == "unknown" else ip
 
 
 def _set_refresh_cookie(response: Response, token: str, settings: Settings) -> None:
