@@ -23,10 +23,10 @@ export function RoadmapSection({ summary }: { summary: RoadmapSummary | null }) 
   });
 
   return (
-    <Card>
+    <Card id="roadmap" className="scroll-mt-24">
       <CardBody className="flex flex-col gap-4 p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-text">Learning roadmap</h2>
+          <h2 className="font-display text-lg text-text">Your roadmap</h2>
           {summary === null && pendingId === null ? (
             <Button size="sm" loading={create.isPending} onClick={() => create.mutate()}>
               Build my roadmap
@@ -63,7 +63,8 @@ export function RoadmapSection({ summary }: { summary: RoadmapSummary | null }) 
           </>
         ) : (
           <p className="text-sm text-text-muted">
-            No learning roadmap yet — build one from your top skill gaps.
+            No roadmap yet. Build one from your top skill gaps: a short, ordered
+            plan with a project to prove each skill.
           </p>
         )}
       </CardBody>

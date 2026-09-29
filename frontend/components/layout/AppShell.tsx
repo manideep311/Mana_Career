@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ManaPanelDock } from "@/components/ai/ManaPanelDock";
+import { DemoBanner } from "@/components/layout/DemoBanner";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -13,7 +14,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-bg md:grid md:grid-cols-[15rem_1fr]">
       <Sidebar />
-      <main className="mx-auto w-full max-w-3xl px-4 py-8 pb-20 md:py-10 md:pb-0">
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 pb-24 md:py-10 md:pb-10">
+        <DemoBanner />
         {children}
       </main>
       <MobileNav />

@@ -41,6 +41,7 @@ function detail(over: Partial<RoadmapDetail> = {}): RoadmapDetail {
     created_at: "2026-09-01T10:00:00Z",
     updated_at: "2026-09-01T10:00:00Z",
     milestones: [],
+    hours_per_week: 5,
     ...over,
   };
 }
@@ -113,5 +114,27 @@ describe("RoadmapTimeline", () => {
     });
 
     expect(await screen.findByText(/No milestones yet/)).toBeInTheDocument();
+  });
+});
+
+describe("RoadmapTimeline phases", () => {
+  it("groups milestones into now, the next 30 days and 30 to 90 days, then the target", async () => {
+    const roadmap = detail({
+      title: "Roadmap for Data Analyst",
+      milestones: [
+        milestone({ id: "a", title: "Window functions", phase: "current" }),
+        milestone({ id: "b", order_index: 1, title: "Dashboards", phase: "next_30" }),
+        milestone({ id: "c", order_index: 2, title: "Python basics", phase: "next_60_90" }),
+      ],
+    });
+    renderWithProviders(<RoadmapTimeline recommendationId="" />, {
+      api: api({ get: vi.fn().mockResolvedValue(roadmap) }),
+    });
+    const now = await screen.findByRole("region", { name: "Now" });
+    expect(now).toHaveTextContent("Window functions");
+    expect(screen.getByRole("region", { name: "Next 30 days" })).toHaveTextContent("Dashboards");
+    expect(screen.getByRole("region", { name: "Days 30 to 90" })).toHaveTextContent("Python basics");
+    expect(screen.getByText("Target").parentElement).toHaveTextContent("Data Analyst");
+    expect(screen.getByText(/about 5 hours a week/)).toBeInTheDocument();
   });
 });

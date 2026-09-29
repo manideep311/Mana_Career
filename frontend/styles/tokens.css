@@ -1,25 +1,31 @@
+/*
+ * Design tokens. Calm, editorial, paper-toned: warm off-white page, ink text,
+ * one deep accent used sparingly. Keep the token *names* stable; components
+ * only ever reference these through the Tailwind theme in app/globals.css.
+ */
 :root {
-  --bg: #faf8f5;
+  --bg: #f8f6f1;
   --surface: #ffffff;
-  --text: #1f2430;
-  --text-muted: #5b6472;
-  --accent: #4f46e5;
+  --surface-sunk: #f1eee7;
+  --text: #1c2128;
+  --text-muted: #58606c;
+  --text-subtle: #58606c;
+  --accent: #2f4f9c;
   --accent-fg: #ffffff;
-  --positive: #1f9d5b;
-  --warning: #c9820a;
-  --danger: #d1453b;
-  --border: #e7e3dc;
-  --ring: rgba(79, 70, 229, 0.4);
-  --radius: 14px;
-  --shadow-1: 0 1px 2px rgba(31, 36, 48, 0.06), 0 1px 3px rgba(31, 36, 48, 0.04);
-  --shadow-2: 0 4px 12px rgba(31, 36, 48, 0.08);
-  --accent-soft: #eef0fb;
-  --positive-soft: #e6f4ec;
-  --warning-soft: #f7edd9;
-  --danger-soft: #fbeae8;
+  --accent-soft: #e9eef8;
+  --positive: #1d7f4e;
+  --positive-soft: #e5f2ea;
+  --warning: #8f5c00;
+  --warning-soft: #f6ecd8;
+  --danger: #b93a31;
+  --danger-soft: #f9e8e6;
   --danger-fg: #ffffff;
-  --surface-sunk: #f2efe9;
-  --text-subtle: #5b6472;
+  --border: #e4e0d7;
+  --ring: rgba(47, 79, 156, 0.4);
+  --radius: 14px;
+  --shadow-1: 0 1px 2px rgba(28, 33, 40, 0.05), 0 1px 3px rgba(28, 33, 40, 0.04);
+  --shadow-2: 0 6px 16px rgba(28, 33, 40, 0.07);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /*

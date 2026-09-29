@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Newsreader } from "next/font/google";
 
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/providers/AuthProvider";
@@ -12,9 +12,17 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+// Display serif for headings only; body copy stays in Inter.
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-display-serif",
+});
+
 export const metadata: Metadata = {
   title: "Mana Career",
-  description: "Your career. Your next move. Smarter with AI.",
+  description:
+    "A calm career companion: see where your experience can take you, what to work on next, and take the next step.",
 };
 
 export default function RootLayout({
@@ -24,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.variable}>
+      <body className={`${inter.variable} ${newsreader.variable}`}>
         <QueryProvider>
           <AuthProvider>
             <Toaster>{children}</Toaster>

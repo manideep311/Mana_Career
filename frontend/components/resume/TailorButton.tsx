@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { BlockView } from "@/components/ai/blocks/block-registry";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
+import { LaunchProgress } from "@/components/motion/LaunchProgress";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toaster";
 import { useTailorRunEvents } from "@/hooks/useTailorRunEvents";
@@ -30,6 +31,14 @@ function pickConfirmed(resumes: ResumeOut[] | undefined): ResumeOut | null {
  * for why the explicit id matters), starts the run, and watches it inline
  * via `useTailorRunEvents` until a `resume_suggestion` block arrives.
  */
+// The tailoring run's real stages: rewrite for the role, then check every claim
+// against the source résumé (the validator loop runs inside the same node).
+const TAILOR_STAGES = [
+  "Preparing your career document…",
+  "Checking every claim against your résumé…",
+  "Ready for you to review",
+];
+
 export function TailorButton({ jobId }: { jobId: string }) {
   const { api } = useAuth();
   const { toast } = useToast();
@@ -91,14 +100,11 @@ export function TailorButton({ jobId }: { jobId: string }) {
     }
 
     return (
-      <Card>
-        <CardBody className="flex items-center gap-2">
-          <Spinner size="sm" />
-          <p className="text-sm text-text-muted">
-            {ev.steps.at(-1)?.summary ?? "Tailoring your résumé for this role…"}
-          </p>
-        </CardBody>
-      </Card>
+      <LaunchProgress
+        stages={TAILOR_STAGES}
+        current={ev.steps.some((st) => st.node === "resume_tailoring") ? 1 : 0}
+        detail="Only facts already in your résumé are used."
+      />
     );
   }
 

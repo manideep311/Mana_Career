@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { ApprovalCard } from "@/components/applications/ApprovalCard";
 import { ErrorState } from "@/components/common/ErrorState";
+import { LaunchProgress } from "@/components/motion/LaunchProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,13 +18,22 @@ import { usePrepareRunEvents } from "@/hooks/usePrepareRunEvents";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
-const STEP_LABEL: Record<string, string> = {
-  resume_tailoring: "Tailoring your résumé",
-  claim_validator: "Checking every claim is grounded",
-  cover_letter: "Writing your cover letter",
-  letter_claim_validator: "Checking the cover letter",
-  email_draft: "Drafting your email",
-  application_prep: "Getting it ready for your review",
+/** The agent's real stages, in order; each node maps onto one of them. */
+const STAGES = [
+  "Tailoring your résumé to this role…",
+  "Checking every claim against your résumé…",
+  "Preparing your cover letter…",
+  "Drafting your email…",
+  "Getting it ready for your review",
+] as const;
+
+const NODE_STAGE: Record<string, number> = {
+  resume_tailoring: 0,
+  claim_validator: 1,
+  cover_letter: 2,
+  letter_claim_validator: 2,
+  email_draft: 3,
+  application_prep: 4,
 };
 
 export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
@@ -152,14 +162,16 @@ export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
 
   // --- streaming progress ---
   const last = ev.steps.at(-1);
+  const stage = last ? (NODE_STAGE[last.node] ?? 0) : 0;
   return (
-    <Card>
-      <CardBody className="flex items-center gap-2">
-        <Spinner size="sm" />
-        <p className="text-sm text-text-muted">
-          {last ? (STEP_LABEL[last.node] ?? last.summary) : "Starting…"}
-        </p>
-      </CardBody>
-    </Card>
+    <LaunchProgress
+      stages={STAGES}
+      current={stage}
+      detail={
+        last
+          ? "Only facts from your résumé are used. Nothing is sent until you approve it."
+          : "Preparing your career documents. Nothing is sent until you approve it."
+      }
+    />
   );
 }

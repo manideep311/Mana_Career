@@ -14,6 +14,7 @@ import {
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ExtractionReview } from "@/components/resume/ExtractionReview";
+import { ResumeAnalysisPanel } from "@/components/resume/ResumeAnalysisPanel";
 import { ResumeFailed } from "@/components/resume/ResumeFailed";
 import { ResumeList } from "@/components/resume/ResumeList";
 import { ResumeStepper } from "@/components/resume/ResumeStepper";
@@ -405,7 +406,12 @@ export default function ResumePage() {
           {(() => {
             const confirmed = resumes.filter((r) => r.confirmed_at != null);
             const target = confirmed.find((r) => r.is_primary) ?? confirmed[0];
-            return target ? <ResumeVersionsList resumeId={target.id} /> : null;
+            return target ? (
+              <>
+                <ResumeAnalysisPanel resumeId={target.id} />
+                <ResumeVersionsList resumeId={target.id} />
+              </>
+            ) : null;
           })()}
           <div ref={uploadAnotherRef} className="flex flex-col gap-2">
             <h2 className="text-sm font-medium text-text">
@@ -425,9 +431,11 @@ export default function ResumePage() {
     <RequireAuth>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-text">Your résumé</h1>
+          <h1 className="font-display text-3xl text-text">Your résumé</h1>
           <p className="text-sm text-text-muted">
-            Upload a PDF and we&apos;ll turn it into your career profile.
+            Upload a PDF. We read it, map your experience, and show you what
+            to strengthen. Nothing is invented: every suggestion points back to
+            your own words.
           </p>
         </header>
         {body()}

@@ -5,8 +5,8 @@ import {
   FileText,
   FlaskConical,
   House,
+  Map,
   ScrollText,
-  Sparkles,
   User,
   type LucideIcon,
 } from "lucide-react";
@@ -19,6 +19,8 @@ export interface NavItem {
   ready: boolean;
   /** Only rendered when the signed-in user is an admin. */
   adminOnly?: boolean;
+  /** Gets a tab in the mobile bottom bar (kept to the few core destinations). */
+  mobile?: boolean;
 }
 
 /**
@@ -27,14 +29,14 @@ export interface NavItem {
  * omitted from the mobile bottom bar.
  */
 export const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Home", icon: House, ready: true },
-  { href: "/resume", label: "Résumé", icon: ScrollText, ready: true },
-  { href: "/jobs", label: "Jobs", icon: Briefcase, ready: true },
-  { href: "/applications", label: "Applications", icon: FileText, ready: true },
-  { href: "/insights", label: "Insights", icon: Compass, ready: true },
-  { href: "/assistant", label: "Mana AI", icon: Sparkles, ready: false },
+  { href: "/dashboard", label: "Home", icon: House, ready: true, mobile: true },
+  { href: "/career", label: "Paths", icon: Map, ready: true, mobile: true },
+  { href: "/resume", label: "Résumé", icon: ScrollText, ready: true, mobile: true },
+  { href: "/jobs", label: "Jobs", icon: Briefcase, ready: true, mobile: true },
+  { href: "/applications", label: "Applications", icon: FileText, ready: true, mobile: true },
+  { href: "/insights", label: "Growth", icon: Compass, ready: true },
   { href: "/activity", label: "Activity", icon: Activity, ready: true },
-  { href: "/profile", label: "Profile", icon: User, ready: true },
+  { href: "/profile", label: "Profile", icon: User, ready: true, mobile: true },
   { href: "/eval", label: "Eval", icon: FlaskConical, ready: true, adminOnly: true },
 ];
 

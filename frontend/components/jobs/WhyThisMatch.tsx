@@ -108,16 +108,13 @@ export function WhyThisMatch({ jobId }: { jobId: string }) {
   return (
     <Card>
       <CardBody className="flex flex-col gap-4 text-text">
-        {/* Fact: the score pill + band word + a plain-language anchor. */}
+        {/* Fact: the band in words (score beside it) + a plain-language anchor. */}
         <div className="flex flex-wrap items-center gap-2">
           <MatchBadge
             score={match.score}
             band={match.band}
             status={match.status}
           />
-          {match.band ? (
-            <span className="text-sm font-medium capitalize">{match.band}</span>
-          ) : null}
           <span className="text-xs text-text-muted">
             vs. your current profile
           </span>

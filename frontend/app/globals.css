@@ -20,6 +20,23 @@
   --color-danger-fg: var(--danger-fg);
   --color-surface-sunk: var(--surface-sunk);
   --color-text-subtle: var(--text-subtle);
+  --font-display: var(--font-display-serif), Georgia, "Times New Roman", serif;
+  --animate-rise: rise 360ms var(--ease-out) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -37,4 +54,63 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Visible focus for keyboard users everywhere, not just on our Button. */
+:where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/*
+ * Paper rocket: a sheet folds into a rocket, launches, and leaves a trail.
+ * Pure CSS on an inline SVG, looping only while work is in flight. With
+ * reduced motion it holds still on the finished rocket instead.
+ */
+.paper-rocket .pr-sheet,
+.paper-rocket .pr-crease,
+.paper-rocket .pr-rocket,
+.paper-rocket .pr-trail {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-duration: 2.8s;
+  animation-iteration-count: infinite;
+  animation-timing-function: var(--ease-out);
+}
+.paper-rocket .pr-sheet { animation-name: pr-sheet; }
+.paper-rocket .pr-crease { animation-name: pr-crease; stroke-dasharray: 40; }
+.paper-rocket .pr-rocket { animation-name: pr-rocket; opacity: 0; }
+.paper-rocket .pr-trail { animation-name: pr-trail; stroke-dasharray: 3 5; opacity: 0; }
+
+@keyframes pr-sheet {
+  0%, 12% { opacity: 1; transform: none; }
+  30% { opacity: 1; transform: scaleY(0.55) rotate(-8deg); }
+  40%, 88% { opacity: 0; transform: scaleY(0.4) rotate(-12deg); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes pr-crease {
+  0%, 14% { stroke-dashoffset: 40; opacity: 1; }
+  30% { stroke-dashoffset: 0; opacity: 1; }
+  38%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes pr-rocket {
+  0%, 30% { opacity: 0; transform: scale(0.8); }
+  42% { opacity: 1; transform: none; }
+  52% { opacity: 1; transform: none; }
+  80% { opacity: 1; transform: translateY(-18px); }
+  92%, 100% { opacity: 0; transform: translateY(-28px); }
+}
+@keyframes pr-trail {
+  0%, 50% { opacity: 0; stroke-dashoffset: 24; }
+  62% { opacity: 1; }
+  82% { opacity: 1; stroke-dashoffset: 0; }
+  96%, 100% { opacity: 0; stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paper-rocket .pr-sheet,
+  .paper-rocket .pr-crease { animation: none; opacity: 0; }
+  .paper-rocket .pr-rocket,
+  .paper-rocket .pr-trail { animation: none; opacity: 1; transform: none; }
 }

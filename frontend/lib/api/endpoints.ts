@@ -5,6 +5,7 @@ import {
   AiActionList,
   AiSession,
   AiSessionList,
+  AppMeta,
   Application,
   ApplicationListResponse,
   ApplicationStatus,
@@ -13,6 +14,9 @@ import {
   ApprovalRequest,
   ApprovalRequestList,
   AuthResponse,
+  CareerOverview,
+  CareerPath,
+  CareerPaths,
   CareerProfile,
   EvalResult,
   EvalRun,
@@ -33,6 +37,7 @@ import {
   Milestone,
   ProfileFull,
   ProfileSkill,
+  ResumeAnalysis,
   ResumeDiff,
   ResumeExtraction,
   ResumeOut,
@@ -45,6 +50,7 @@ import {
   Section,
   SkillGap,
   SkillGapStatus,
+  SkillPlan,
   Strength,
   TimelineItem,
   UserOut,
@@ -146,6 +152,9 @@ export function makeApi(f: Fetcher) {
       },
       async extraction(id: string) {
         return f<ResumeExtraction>(`/api/v1/resumes/${id}/extraction`);
+      },
+      async analysis(id: string) {
+        return f<ResumeAnalysis>(`/api/v1/resumes/${id}/analysis`);
       },
       async patch(id: string, body: { title?: string; is_primary?: boolean }) {
         return f<ResumeOut>(`/api/v1/resumes/${id}`, {
@@ -282,6 +291,26 @@ export function makeApi(f: Fetcher) {
     insights: {
       async get() {
         return f<Insights>("/api/v1/insights");
+      },
+    },
+    meta: {
+      async get() {
+        return f<AppMeta>("/api/v1/meta");
+      },
+    },
+    career: {
+      async overview() {
+        return f<CareerOverview>("/api/v1/career/overview");
+      },
+      async paths() {
+        return f<CareerPaths>("/api/v1/career/paths");
+      },
+      async path(slug: string) {
+        return f<CareerPath>(`/api/v1/career/paths/${encodeURIComponent(slug)}`);
+      },
+      async skills(path?: string) {
+        const qs = path ? `?path=${encodeURIComponent(path)}` : "";
+        return f<SkillPlan>(`/api/v1/career/skills${qs}`);
       },
     },
     roadmaps: {

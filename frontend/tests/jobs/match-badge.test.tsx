@@ -4,9 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { MatchBadge } from "@/components/jobs/MatchBadge";
 
 describe("MatchBadge", () => {
-  it("renders the rounded score as a band-colored pill when ready", () => {
-    render(<MatchBadge score={92} band="strong" status="ready" />);
-    expect(screen.getByText("92")).toBeInTheDocument();
+  it("leads with the band in words and keeps the rounded score as context", () => {
+    render(<MatchBadge score={91.6} band="strong" status="ready" />);
+    expect(screen.getByText("Strong match")).toBeInTheDocument();
+    expect(screen.getByLabelText("score 92 of 100")).toHaveTextContent("92");
   });
 
   it("shows a scoring affordance while the worker runs", () => {

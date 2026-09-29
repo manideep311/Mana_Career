@@ -278,10 +278,16 @@ export interface Milestone {
   checkpoint: string | null;
   status: RoadmapMilestoneStatus;
   completed_at: string | null;
+  /** Where it sits on the timeline; only set on the full roadmap view. */
+  phase?: MilestonePhase | null;
 }
+
+export type MilestonePhase = "done" | "current" | "next_30" | "next_60_90" | "later";
 
 export interface RoadmapDetail extends Roadmap {
   milestones: Milestone[];
+  /** The weekly pace the phases assume. */
+  hours_per_week: number;
 }
 export interface JobCard {
   id: string; title: string | null; company: string | null; location: string | null;
@@ -514,4 +520,173 @@ export interface ApprovalRequestList {
 export interface ApprovalDecision {
   decision: "approve" | "reject";
   note?: string;
+}
+
+/* ------------------------------------------------------------------ meta */
+
+export interface AppMeta {
+  demo_mode: boolean;
+  ai_writing: boolean;
+  web_research: boolean;
+}
+
+/* ------------------------------------------------------------------ career */
+
+export type PathFit = "close" | "stretch" | "pivot";
+
+export interface PathSkill {
+  slug: string;
+  label: string;
+  /** Share (0..1) of this family's roles that ask for it. */
+  demand: number;
+  required: boolean;
+  have: boolean;
+  evidence: string[];
+}
+
+export interface PathAction {
+  kind: "project" | "resume" | "apply" | "roadmap" | "explore";
+  title: string;
+  detail: string;
+}
+
+export interface CareerPath {
+  slug: string;
+  title: string;
+  summary: string;
+  job_count: number;
+  stated_target: boolean;
+  fit: PathFit;
+  fit_label: string;
+  fit_explanation: string;
+  why: string;
+  have: PathSkill[];
+  missing: PathSkill[];
+  relevant_experience: string[];
+  seniority_note: string | null;
+  next_actions: PathAction[];
+  related: { slug: string; title: string }[];
+  roles: { id: string; title: string; company: string | null }[];
+  evidence_is_thin: boolean;
+}
+
+export interface CareerPaths {
+  paths: CareerPath[];
+  notes: string[];
+}
+
+export interface LearningResourceRef {
+  id: string;
+  title: string;
+  provider: string;
+  url: string;
+  type: string;
+  level: string;
+  est_hours: number | null;
+  cost: string;
+}
+
+export interface SkillStep {
+  slug: string;
+  label: string;
+  category: string;
+  why_it_matters: string;
+  requirement: string;
+  current_evidence: string;
+  resource: LearningResourceRef | null;
+  practice_project: string;
+  roadmap_position: number | null;
+}
+
+export interface SkillPlan {
+  path_slug: string | null;
+  path_title: string | null;
+  steps: SkillStep[];
+}
+
+export interface CareerNextAction {
+  kind: string;
+  title: string;
+  detail: string;
+  href: string | null;
+}
+
+export interface JourneyStage {
+  key: string;
+  label: string;
+  status: "done" | "current" | "upcoming";
+  detail: string;
+}
+
+export interface MilestoneBrief {
+  id: string;
+  title: string;
+  skill_label: string;
+  status: string;
+}
+
+export interface RoadmapBrief {
+  id: string;
+  title: string;
+  done: number;
+  total: number;
+  current: MilestoneBrief | null;
+  upcoming: MilestoneBrief | null;
+}
+
+export interface Opportunity {
+  job_id: string;
+  title: string;
+  company: string | null;
+  band: MatchBand | null;
+  reason: string | null;
+  gap: string | null;
+}
+
+export interface CareerOverview {
+  direction: CareerPath | null;
+  direction_summary: string;
+  next_actions: CareerNextAction[];
+  journey: JourneyStage[];
+  roadmap: RoadmapBrief | null;
+  opportunities: Opportunity[];
+  skills: SkillStep[];
+  notes: string[];
+  has_resume: boolean;
+}
+
+export type IssueSeverity = "high" | "medium" | "low";
+
+export interface AnalysisIssue {
+  id: string;
+  severity: IssueSeverity;
+  area: string;
+  problem: string;
+  why_it_matters: string;
+  suggestion: string;
+  examples: string[];
+}
+
+export interface SkillEvidence {
+  slug: string;
+  label: string;
+  category: string;
+  /** Shown in an experience or project line, not only listed. */
+  applied: boolean;
+  lines: string[];
+}
+
+export interface ResumeAnalysis {
+  resume_id: string;
+  enough_text: boolean;
+  sections: Record<string, boolean>;
+  word_count: number;
+  page_count: number | null;
+  bullet_count: number;
+  bullets_with_results: number;
+  strengths: string[];
+  issues: AnalysisIssue[];
+  skills: SkillEvidence[];
+  alignment: { target: string; evidenced: string[]; missing: string[] } | null;
+  target_path: { slug: string; title: string } | null;
 }

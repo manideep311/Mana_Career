@@ -8,14 +8,15 @@ import { cn } from "@/lib/cn";
 import { useAuth } from "@/providers/AuthProvider";
 
 /**
- * Fixed bottom bar for small screens (`md:hidden`). Only the ready routes get a
- * tab; the not-ready items live in the sidebar until they ship.
+ * Fixed bottom bar for small screens (`md:hidden`). Only the core destinations
+ * (`mobile: true`) get a tab so each stays a comfortable touch target; the rest
+ * are one link away from the dashboard.
  */
 export function MobileNav() {
   const pathname = usePathname() ?? "";
   const { user } = useAuth();
   const items = NAV.filter(
-    (item) => item.ready && (!item.adminOnly || user?.is_admin),
+    (item) => item.ready && item.mobile && (!item.adminOnly || user?.is_admin),
   );
 
   return (

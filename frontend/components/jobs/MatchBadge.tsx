@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { MatchBand, MatchStatus } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
+import { BAND_LABEL } from "@/lib/match";
 
 /**
  * Band → pill classes. Semantic tokens only — no raw hex or Tailwind color
@@ -28,7 +29,7 @@ const BAND_CLASS: Record<MatchBand, string> = {
  * with no `onScore` (read-only).
  *
  * States:
- *  - `ready` + a score → a band-colored score pill.
+ *  - `ready` + a score → a band-colored pill: the band in words, the score beside it.
  *  - `scoring`         → "Scoring…" with a spinner.
  *  - `failed`          → "Score unavailable" (+ a "Retry" button when `onScore`).
  *  - `null`            → a "Score" button when `onScore` is given, else nothing.
@@ -45,15 +46,20 @@ export function MatchBadge({
   onScore?: () => void;
 }) {
   if (status === "ready" && score != null) {
+    // Words lead; the number is secondary context, never the headline.
+    const rounded = Math.round(score);
     return (
       <span
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
+          "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
           BAND_CLASS[band ?? "good"],
         )}
-        title="Match score"
+        title={`Match score ${rounded} of 100`}
       >
-        {String(Math.round(score))}
+        {band ? BAND_LABEL[band] : "Match"}
+        <span className="tabular-nums opacity-70" aria-label={`score ${rounded} of 100`}>
+          {rounded}
+        </span>
       </span>
     );
   }
