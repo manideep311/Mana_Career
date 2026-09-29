@@ -45,9 +45,9 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
 - [x] A. Config & JWT hardening (R3, R4, provider validation, R1, R2)
 - [x] B. Worker retry/backoff/final-failure + stuck-job sweeper (R10) + real-ARQ tests
 - [x] C. Sessions: refresh race (FOR UPDATE + grace), `sid`/`iss`/`aud`, revocation (R5)
-- [ ] D. Rate limiter (R8) + client-IP helper
-- [ ] E. Upload body guard (R9)
-- [ ] F. Ops: compose limits/logging/healthchecks/backups; nginx headers (R6); CI hardening
+- [x] D. Rate limiter (R8) + client-IP helper
+- [x] E. Upload body guard (R9)
+- [x] F. Ops: compose limits/logging/healthchecks/backups; nginx headers (R6); CI hardening
 - [ ] G. Frontend reliability: single-flight refresh, bounded polling, error/not-found/loading pages
 - [ ] H. Guidance engine: résumé analysis, skill evidence, career paths, skill-gap detail, roadmap phases
 - [ ] I. UI: tokens/typography, landing, paper rocket, contextual progress, dashboard, paths, résumé,
@@ -86,3 +86,15 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
   Tests: token claims, API revocation (logout/unknown sid/password change), grace, logged-out no-grace,
   FOR UPDATE emitted, real 4-way concurrent refresh in separate transactions, frontend single-flight
   (verified to fail on the old provider).
+- a820bc1 CI green (all 4 jobs): real-ARQ tests, 4-way concurrent refresh, revocation tests pass.
+- D (59b7ee0): Lua INCR+TTL self-heal, LLM bucket only for model-work POSTs, CF-Connecting-IP only from
+  TRUSTED_PROXY_CIDRS; auth audit IPs via the same helper. Lua script verified on fakeredis[lua].
+- E (6a97801): pure-ASGI BodySizeLimitMiddleware (declared length + streaming count, raises HTTP 413 from
+  receive so FastAPI re-raises it), 1 MiB default / resumes RESUME_MAX_BYTES+64 KiB; bounded file.read.
+- F: every service has CPU/mem limits + json-file rotation; worker healthcheck `arq --check` (heartbeat
+  30 s); nginx server_tokens off + HSTS/CSP/XFO/nosniff/Referrer/Permissions, X-Powered-By hidden; Next
+  poweredByHeader false; scripts/backup.sh (custom-format dump verified with pg_restore --list, files via
+  api container, retention) + CI backup round-trip; CI: SHA-pinned node24 actions (checkout v7,
+  setup-node v7, setup-uv v10, pnpm v6, buildx v4, trivy v0.36.0), permissions contents:read,
+  concurrency, timeouts, pnpm build step, all-services-healthy gate; Dependabot (actions/uv/npm/docker);
+  runbook + SECURITY.md updated; runbook mis-encoded bytes repaired. Branch protection -> owner (R12).

@@ -47,5 +47,8 @@ prod-logs:
 seed:
     docker compose -f compose.prod.yml run --rm migrate python -m app.seed all
 
+backup:
+    ./scripts/backup.sh
+
 smoke-prod:
     ./scripts/smoke-prod.sh

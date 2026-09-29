@@ -37,6 +37,18 @@ case "$redirect" in
   *) fail "http:// not redirected to https (got: $redirect)" ;;
 esac
 
+# 7. Security headers on a page and an API response; no version/framework leaks
+for path in / /api/v1/meta; do
+  headers=$(curl -sSk -D - -o /dev/null "$base_https$path" | tr -d '\r' | tr 'A-Z' 'a-z')
+  for want in "strict-transport-security: max-age=" "content-security-policy: default-src 'self'" \
+              "x-content-type-options: nosniff" "x-frame-options: deny" "referrer-policy:" \
+              "permissions-policy:"; do
+    printf '%s\n' "$headers" | grep -qF "$want" || fail "$path is missing header: $want"
+  done
+  printf '%s\n' "$headers" | grep -q '^x-powered-by:' && fail "$path leaks x-powered-by"
+  printf '%s\n' "$headers" | grep -qE '^server: .*[0-9]' && fail "$path leaks a server version"
+done
+
 # Keep the upload/restart exercise opt-in because it creates persistent test
 # data. CI enables this only for its disposable stack.
 if [ "${SMOKE_UPLOAD_PERSISTENCE:-0}" != "1" ]; then
@@ -44,7 +56,7 @@ if [ "${SMOKE_UPLOAD_PERSISTENCE:-0}" != "1" ]; then
   exit 0
 fi
 
-# 7. Exercise the shared API/worker file store with a synthetic PDF. Keep the
+# 8. Exercise the shared API/worker file store with a synthetic PDF. Keep the
 # persisted upload: production smoke runs must not remove application data.
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT

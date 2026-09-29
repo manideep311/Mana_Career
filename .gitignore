@@ -38,3 +38,6 @@ Thumbs.db
 # Local TLS material for compose.prod.yml (never commit real keys)
 deploy/nginx/certs/*
 !deploy/nginx/certs/.gitkeep
+
+# Local production backups (scripts/backup.sh)
+/backups/

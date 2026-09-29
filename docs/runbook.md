@@ -22,17 +22,17 @@ git clone https://github.com/manideep311/Mana_Career.git
 cd Mana_Career
 
 # 2.1 Configure
-cp .env.example .env
-#   Edit .env — at minimum (see the PRODUCTION block in the file):
-#     ENV=prod
-#     JWT_SECRET=$(openssl rand -hex 32)
-#     POSTGRES_PASSWORD=<a real secret>
-#     PROXY_SUBNET=172.30.0.0/24
-#     NGINX_PROXY_IP=172.30.0.2
-#     REFRESH_COOKIE_SECURE=true
-#     SEARCH_PROVIDER=tavily + SEARCH_API_KEY=...               (required in production)
-#     LLM_PROVIDER=anthropic   + ANTHROPIC_API_KEY=...      (or leave fake)
-#     EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...        (or leave fake)
+just init-env        # or: bash ./scripts/init-env.sh
+#   Writes .env from .env.example with a generated 64-char JWT_SECRET and a
+#   random POSTGRES_PASSWORD (it never overwrites an existing .env).
+#   compose.prod.yml always runs the backend with ENV=prod, which refuses to
+#   start on placeholder secrets, insecure cookies, wildcard CORS, or fake AI
+#   providers. Then choose ONE of:
+#     Real providers:  LLM_PROVIDER=anthropic   + ANTHROPIC_API_KEY=...
+#                      EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...
+#     Labelled demo:   DEMO_MODE=true   (keeps the fake providers; the UI says so)
+#   Optional:          SEARCH_PROVIDER=tavily + SEARCH_API_KEY=...  (web research)
+#   Network (defaults are fine): PROXY_SUBNET, NGINX_PROXY_IP, PROXY_DYNAMIC_RANGE
 
 # 2.2 TLS material -> deploy/nginx/certs/{fullchain.pem,privkey.pem}
 #   Self-signed (dev / demo):
@@ -63,7 +63,7 @@ docker compose -f compose.prod.yml up -d
 
 Run the storage preparation step before direct `docker compose` startup too. It
 is safe to repeat after a fresh boot or completed migration and does not remove
-or replace r�sum� files. On a first upgrade, the guard requires explicit
+or replace résumé files. On a first upgrade, the guard requires explicit
 migration confirmation. On a host without passwordless sudo, run it as root
 (for example, `sudo bash ./scripts/prepare-prod.sh`).
 
@@ -84,13 +84,29 @@ in the database and file store; CI removes them with the disposable stack.
 Open `https://localhost/` (accept the self-signed warning) — the app shell loads
 and talks to the API same-origin through nginx.
 
-Production settings reject the offline fictional search provider. Configure a
-Tavily API key before starting the API and worker; search results include source
-URLs, provider publication dates when available, and the retrieval timestamp.
-An unknown publication date is preserved as unknown rather than presented as
-fresh evidence. Provider throttling and transient server errors get bounded
-retries; a provider outage yields an unavailable research result without
-substituting fabricated search hits.
+Production refuses the fake providers unless `DEMO_MODE=true`, and the UI
+labels a demo deployment as such (it reads `GET /api/v1/meta`). Web research
+is optional: with `SEARCH_PROVIDER=none` the agent reports the research step as
+skipped. With `SEARCH_PROVIDER=tavily`, search results include source URLs,
+provider publication dates when available, and the retrieval timestamp; an
+unknown publication date is preserved as unknown rather than presented as fresh
+evidence. Provider throttling and transient server errors get bounded retries;
+a provider outage yields an unavailable research result without substituting
+fabricated search hits. Retrieved web text is always fenced as untrusted data
+before it reaches a model prompt.
+
+Every HTTPS response carries HSTS, a same-origin Content-Security-Policy,
+`X-Frame-Options: DENY`, `nosniff`, a `Referrer-Policy` and a
+`Permissions-Policy`; nginx and Next.js don't advertise their versions. The
+API's OpenAPI schema and Swagger/ReDoc UIs are not served in production.
+
+Background jobs retry transient failures (5 s, 10 s, 20 s backoff, three
+attempts) and then record an explicit failure the UI shows. A sweeper runs
+every five minutes and fails anything still "in progress" 20 minutes after its
+last status change (for example after a worker crash), so nothing spins
+forever. `docker compose ps` shows the worker as unhealthy if its Redis
+heartbeat stops; plain Docker does not restart unhealthy containers, so alert on
+it or restart the worker by hand.
 
 The API has no published host port. Production Compose separates the `data`
 bridge (database, Redis, migration job, worker) from `ingress` (frontend and
@@ -114,6 +130,8 @@ Uvicorn to trust every peer or the entire bridge subnet.
 | Restart one service | `docker compose -f compose.prod.yml restart api` |
 | Apply a new migration | `git pull && docker compose -f compose.prod.yml build && docker compose -f compose.prod.yml run --rm migrate && docker compose -f compose.prod.yml up -d` |
 | Re-seed reference data | `docker compose -f compose.prod.yml run --rm migrate python -m app.seed all` |
+| Back up now | `just backup` (see section 5) |
+| Check the worker heartbeat | `docker compose -f compose.prod.yml exec worker arq --check app.worker.main.WorkerSettings` |
 | Stop (keep data) | `docker compose -f compose.prod.yml down` |
 | Stop and wipe data | `docker compose -f compose.prod.yml down -v` |
 
@@ -124,22 +142,37 @@ Two pieces of state: the `pgdata` volume (all rows) and `backend/var/files`
 directory at `/app/var/files`; the application runs as UID 10001 in both
 containers. Restrict host access because résumé files contain personal data.
 
-```bash
-# Postgres logical dump (run on a schedule, e.g. cron @daily)
-docker compose -f compose.prod.yml exec -T db \
-  pg_dump -U "${POSTGRES_USER:-mana}" "${POSTGRES_DB:-mana}" | gzip > "backup-$(date +%F).sql.gz"
+`scripts/backup.sh` (`just backup`) writes both into `./backups` (or
+`$BACKUP_DIR`) with a UTC timestamp:
 
-# Uploaded files
-tar czf "files-$(date +%F).tgz" backend/var/files
+- `db-<stamp>.dump` — a `pg_dump --format=custom` dump. The script reads it
+  back with `pg_restore --list` and refuses to keep a dump it can't read.
+- `files-<stamp>.tgz` — the résumé store, archived through the `api`
+  container (the host directory is private to UID 10001).
+
+Files older than `$BACKUP_KEEP_DAYS` (default 14) are removed. CI runs the
+script against its disposable stack on every push.
+
+```bash
+just backup
+# Schedule daily at 03:15 (crontab -e on the host):
+15 3 * * *  cd /srv/mana-career && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
+
+Copy `./backups` off the host (object storage, another machine). A backup
+that only lives next to the database it protects is not a backup.
 
 ## 6. Restore
 
 ```bash
-docker compose -f compose.prod.yml up -d db
-gunzip -c backup-YYYY-MM-DD.sql.gz | docker compose -f compose.prod.yml exec -T db \
-  psql -U "${POSTGRES_USER:-mana}" -d "${POSTGRES_DB:-mana}"
-tar xzf files-YYYY-MM-DD.tgz
+docker compose -f compose.prod.yml up -d db api
+# Database: drop and recreate the objects contained in the dump.
+docker compose -f compose.prod.yml exec -T db \
+  pg_restore --clean --if-exists -U "${POSTGRES_USER:-mana}" -d "${POSTGRES_DB:-mana}" \
+  < backups/db-YYYYMMDDTHHMMSSZ.dump
+# Résumé files: unpack through the api container (runs as UID 10001).
+docker compose -f compose.prod.yml exec -T api tar -xzf - -C /app/var \
+  < backups/files-YYYYMMDDTHHMMSSZ.tgz
 docker compose -f compose.prod.yml up -d
 ```
 
@@ -206,6 +239,30 @@ Replace `deploy/nginx/certs/{fullchain.pem,privkey.pem}` with your CA-issued
 chain and key (same filenames), then `docker compose -f compose.prod.yml
 restart nginx`. For automatic renewal, terminate TLS at an upstream load
 balancer or add an ACME sidecar — out of scope here (single-tenant portfolio).
+
+### Temporary public demo through a Cloudflare tunnel
+
+To share a running stack without opening ports:
+
+```bash
+cloudflared tunnel --url https://localhost:443 --no-tls-verify
+```
+
+It prints a `https://<random>.trycloudflare.com` address that lasts as long as
+the command runs. Point it at nginx's port 443 (not the frontend or port 80:
+the frontend calls the API same-origin, and port 80 only redirects).
+
+Every visitor then reaches nginx from the tunnel connector's address, so they
+would all share one rate-limit bucket. To give each visitor their own, set
+`TRUSTED_PROXY_CIDRS` in `.env` to the address the connector reaches nginx
+from — for `cloudflared` on the host that is the ingress network's gateway
+(`172.30.0.1/32` with the default `PROXY_SUBNET`) — and restart `api`. The API
+then trusts `CF-Connecting-IP` from that address only. Do this only while all
+traffic arrives through the tunnel: a client that can reach nginx directly from
+that address could set the header itself.
+
+Before sharing any link, confirm `.env` came from `just init-env` (a random
+`JWT_SECRET`); the stack refuses to start on the public placeholder anyway.
 
 ## 10. Out of scope (see the Phase 14 spec §3)
 

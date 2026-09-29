@@ -5,9 +5,22 @@ on:
     branches: ["**"]
   pull_request:
 
+# Least privilege: jobs only read the repository. No job uses repository
+# secrets; every credential below is an inline, CI-only placeholder.
+permissions:
+  contents: read
+
+# One run per branch; a newer push cancels an in-flight run except on main.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Third-party actions are pinned to full commit SHAs (tags can be moved).
+# Dependabot (.github/dependabot.yml) proposes updates to these pins.
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -30,14 +43,14 @@ jobs:
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET: ci-only-jwt-secret-for-the-backend-test-suite
-      # Phase 13 floor: raised from 55. Total is ~88%; the closeout sets the highest safe value.
+      # Total coverage is ~89%; 80 is the enforced floor.
       PYTEST_ADDOPTS: "--cov-fail-under=80"
     defaults:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --frozen
       - run: uv run pip-audit
       - run: PGPASSWORD=mana psql -h localhost -U mana -d mana -c 'CREATE DATABASE mana_test;' || true
@@ -48,6 +61,7 @@ jobs:
 
   eval:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -63,44 +77,33 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
-      JWT_SECRET: ci-only-jwt-secret-for-the-backend-test-suite
+      JWT_SECRET: ci-only-jwt-secret-for-the-eval-harness-jobs
+      EMBEDDINGS_PROVIDER: fake
+      LLM_PROVIDER: fake
     defaults:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: uv sync --frozen
       - run: PGPASSWORD=mana psql -h localhost -U mana -d mana -c 'CREATE DATABASE mana_test;' || true
       - run: uv run alembic upgrade head
-        env:
-          DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       - run: uv run python -m eval.run retrieval --write-db
-        env:
-          DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
-          EMBEDDINGS_PROVIDER: fake
-          LLM_PROVIDER: fake
-          JWT_SECRET: ci-only-jwt-secret-for-the-eval-harness-jobs
-          REDIS_URL: redis://localhost:6379/0
       - run: uv run python -m eval.run generation --write-db --provider fake
-        env:
-          DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
-          EMBEDDINGS_PROVIDER: fake
-          LLM_PROVIDER: fake
-          JWT_SECRET: ci-only-jwt-secret-for-the-eval-harness-jobs
-          REDIS_URL: redis://localhost:6379/0
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 11
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -110,12 +113,14 @@ jobs:
       - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test run
+      - run: pnpm build
 
   images:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Seed a dev .env for the smoke
         run: cp .env.example .env
@@ -147,7 +152,7 @@ jobs:
         run: docker compose -f compose.prod.yml build
 
       - name: Trivy scan (api)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: mana-career-api:local
           severity: HIGH,CRITICAL
@@ -155,7 +160,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy scan (worker)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: mana-career-worker:local
           severity: HIGH,CRITICAL
@@ -163,7 +168,7 @@ jobs:
           exit-code: "1"
 
       - name: Trivy scan (frontend)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: mana-career-frontend:local
           severity: HIGH,CRITICAL
@@ -183,8 +188,26 @@ jobs:
           done
           echo "stack did not become ready in 180s"; exit 1
 
+      - name: Every service reports healthy
+        run: |
+          for i in $(seq 1 40); do
+            unhealthy=$(docker compose -f compose.prod.yml ps --format '{{.Service}} {{.Health}}' \
+              | awk '$2 != "" && $2 != "healthy" {print $1}')
+            [ -z "$unhealthy" ] && { docker compose -f compose.prod.yml ps; exit 0; }
+            sleep 3
+          done
+          docker compose -f compose.prod.yml ps
+          echo "not healthy: $unhealthy"; exit 1
+
       - name: Smoke
         run: SMOKE_UPLOAD_PERSISTENCE=1 ./scripts/smoke-prod.sh
+
+      - name: Backup round-trip
+        run: |
+          BACKUP_DIR="$RUNNER_TEMP/backups" ./scripts/backup.sh
+          ls -l "$RUNNER_TEMP/backups"
+          test -s "$(ls "$RUNNER_TEMP"/backups/db-*.dump)"
+          tar -tzf "$(ls "$RUNNER_TEMP"/backups/files-*.tgz)" | grep -q '\.pdf$'
 
       - name: Dump logs on failure
         if: failure()

@@ -129,3 +129,30 @@ def test_prod_compose_limits_forwarded_ip_trust_to_nginx(tmp_path: Path) -> None
     dynamic = ipaddress.ip_network(ipam["ip_range"])
     assert ipaddress.ip_address(nginx_network["ipv4_address"]) not in dynamic
     assert dynamic.subnet_of(ipaddress.ip_network(ipam["subnet"]))
+
+
+LONG_RUNNING = ("db", "redis", "api", "worker", "frontend", "nginx")
+
+
+def test_every_service_has_resource_limits_and_log_rotation(tmp_path: Path) -> None:
+    result = _compose_config(tmp_path, password="test-only-password")
+    if result.returncode != 0:
+        pytest.skip(f"Docker Compose config unavailable: {result.stderr}")
+    services = json.loads(result.stdout)["services"]
+    for name, service in services.items():
+        limits = service.get("deploy", {}).get("resources", {}).get("limits", {})
+        assert limits.get("cpus") and limits.get("memory"), name
+        options = service.get("logging", {}).get("options", {})
+        assert service["logging"]["driver"] == "json-file", name
+        assert options.get("max-size") and options.get("max-file"), name
+
+
+def test_every_long_running_service_has_a_healthcheck(tmp_path: Path) -> None:
+    result = _compose_config(tmp_path, password="test-only-password")
+    if result.returncode != 0:
+        pytest.skip(f"Docker Compose config unavailable: {result.stderr}")
+    services = json.loads(result.stdout)["services"]
+    for name in LONG_RUNNING:
+        assert services[name].get("healthcheck", {}).get("test"), name
+        assert services[name]["restart"] == "unless-stopped", name
+    assert services["worker"]["healthcheck"]["test"][:3] == ["CMD", "arq", "--check"]
