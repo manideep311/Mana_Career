@@ -231,6 +231,7 @@ async def test_real_arq_worker_retries_parse_resume_until_it_succeeds(
         await pool.enqueue_job("parse_resume", str(rid))
         worker = Worker(
             functions=[parse_resume],
+            queue_name=queue,  # Worker defaults to the global "arq:queue"
             redis_pool=pool,
             burst=True,
             poll_delay=0.01,

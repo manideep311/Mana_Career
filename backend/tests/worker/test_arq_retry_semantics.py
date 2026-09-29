@@ -19,7 +19,7 @@ from typing import Any
 import pytest
 from arq import ArqRedis, create_pool
 from arq.connections import RedisSettings
-from arq.worker import Worker
+from arq.worker import Worker, func
 
 from app.worker import retry as retry_policy
 from app.worker.retry import MAX_TRIES, retry_or_fail
@@ -50,7 +50,12 @@ async def _run(pool: ArqRedis, fn: Callable[..., Awaitable[Any]]) -> Any:
     job = await pool.enqueue_job(fn.__name__)
     assert job is not None
     worker = Worker(
-        functions=[fn],
+        # Register under __name__: ARQ defaults to __qualname__, which for a
+        # function defined inside a test is "test_x.<locals>.fn".
+        functions=[func(fn, name=fn.__name__)],
+        # Explicit: Worker's queue_name defaults to the global "arq:queue", not
+        # to the pool's default queue.
+        queue_name=pool.default_queue_name,
         redis_pool=pool,
         burst=True,
         poll_delay=0.01,
