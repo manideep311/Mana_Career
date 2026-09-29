@@ -31,6 +31,7 @@ smoke:
     ./scripts/smoke.sh
 
 prod-up:
+    bash ./scripts/prepare-prod.sh
     docker compose -f compose.prod.yml up -d --build
 
 prod-down:

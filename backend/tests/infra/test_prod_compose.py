@@ -63,6 +63,10 @@ def test_api_and_worker_mount_the_same_persistent_file_directory(tmp_path: Path)
             for mount in service["volumes"]
             if mount["target"] == "/app/var/files"
         }
+        file_mount = next(
+            mount for mount in service["volumes"] if mount["target"] == "/app/var/files"
+        )
+        assert file_mount["bind"]["create_host_path"] is False
         assert service["environment"]["FILE_STORE_LOCAL_DIR"] == "/app/var/files"
     assert mounts["api"] == mounts["worker"]
     assert "/app/var/files" in mounts["api"]

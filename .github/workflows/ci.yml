@@ -131,6 +131,9 @@ jobs:
       - name: Validate production Compose configuration
         run: docker compose -f compose.prod.yml config --quiet
 
+      - name: Prepare persistent résumé storage
+        run: bash ./scripts/prepare-prod.sh
+
       - name: Generate a throwaway self-signed cert
         run: |
           mkdir -p deploy/nginx/certs

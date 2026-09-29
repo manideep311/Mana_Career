@@ -48,7 +48,11 @@ async def job_research(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]
             web_search,
         )
     except SearchProviderError:
-        return {"research_notes": [], "_summary": "Web research unavailable"}
+        return {
+            "research_notes": [],
+            "_summary": "Web research unavailable",
+            "_step_status": "error",
+        }
 
     titles = [str(h.get("title") or "").strip() for h in hits if h.get("title")]
 

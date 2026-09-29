@@ -42,20 +42,30 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
   -subj "/CN=localhost"
 #   Real cert: drop your chain + key in as those exact two filenames.
 
-# 2.3 Build images
+# 2.3 Prepare shared rÃ©sumÃ© storage (creates it if absent, sets ownership to
+#     container UID/GID 10001, and keeps existing files).
+bash ./scripts/prepare-prod.sh
+
+# 2.4 Build images
 docker compose -f compose.prod.yml build
 
-# 2.4 Start data services, run migrations, seed reference data
+# 2.5 Start data services, run migrations, seed reference data
 docker compose -f compose.prod.yml up -d db redis
 docker compose -f compose.prod.yml run --rm migrate                         # alembic upgrade head
 docker compose -f compose.prod.yml run --rm migrate python -m app.seed all  # skills + jobs + learning
 
-# 2.5 Start everything
+# 2.6 Start everything
 docker compose -f compose.prod.yml up -d
 ```
 
-`just` shortcuts: `just prod-up` (build + up), `just seed`, `just smoke-prod`,
+`just` shortcuts: `just prod-up` (prepare storage, build + up), `just seed`, `just smoke-prod`,
 `just prod-logs`, `just prod-down`.
+
+Run the storage preparation step before direct `docker compose` startup too. It
+is safe to repeat after a fresh boot or completed migration and does not remove
+or replace résumé files. On a first upgrade, the guard requires explicit
+migration confirmation. On a host without passwordless sudo, run it as root
+(for example, `sudo bash ./scripts/prepare-prod.sh`).
 
 ## 3. Verify
 
@@ -161,18 +171,27 @@ cp -a backend/var/files.stage/. backend/var/files/
 sudo chown -R 10001:10001 backend/var/files
 sudo chmod -R u=rwX,go= backend/var/files
 rm -rf backend/var/files.stage
-docker compose -f compose.prod.yml up -d
 ```
 
-Confirm the API and worker can read the same test upload before resuming normal
-traffic. Keep the archive in the protected backup location; it contains
-personal data.
+Keep the archive in the protected backup location; it contains personal data.
+Then run `FILE_STORE_MIGRATION_CONFIRMED=1 bash ./scripts/prepare-prod.sh`
+and start the new stack with `docker compose -f compose.prod.yml up -d`. The
+confirmation is required while an existing API container does not yet use the
+shared host store, even when the copied directory is nonempty. If the old
+container was verified to contain no uploads, the same explicit confirmation
+applies. For later upgrades, `just prod-up` checks that existing API containers
+already use the shared store and does not need the confirmation. Confirm the
+API and worker can read the same test upload before resuming normal traffic.
 
 ## 8. Upgrade & rollback
 
-**Upgrade:** `git pull` -> `docker compose -f compose.prod.yml build` ->
-`docker compose -f compose.prod.yml run --rm migrate` ->
-`docker compose -f compose.prod.yml up -d`. Take a backup (section 5) first.
+**Upgrade:** take a backup (section 5) first. Before the first deployment of
+the shared file-store bind mount, complete section 7 while the old API container
+is still available. Then run `FILE_STORE_MIGRATION_CONFIRMED=1 just prod-up` to
+prepare storage, build images, and start the stack. This one-time confirmation
+is needed only for the first mount; later `just prod-up` runs verify that the API
+already uses the shared host store. For a manual rollout, use the confirmed
+preparation command in section 7 before building and starting Compose.
 
 **Rollback:**
 - Code/image: check out the previous commit (or set `TAG=` in `.env` to a

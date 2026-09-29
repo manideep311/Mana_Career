@@ -68,7 +68,11 @@ services:
       - "2"
       - --forwarded-allow-ips=${NGINX_PROXY_IP:-172.30.0.2}
     volumes:
-      - ./backend/var/files:/app/var/files
+      - type: bind
+        source: ./backend/var/files
+        target: /app/var/files
+        bind:
+          create_host_path: false
     networks: [data, ingress]
     depends_on:
       migrate:
@@ -95,7 +99,11 @@ services:
     environment: *backend-env
     networks: [data]
     volumes:
-      - ./backend/var/files:/app/var/files
+      - type: bind
+        source: ./backend/var/files
+        target: /app/var/files
+        bind:
+          create_host_path: false
     depends_on:
       migrate:
         condition: service_completed_successfully

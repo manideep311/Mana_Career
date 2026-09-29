@@ -34,7 +34,7 @@ async def test_tavily_maps_sources_and_limits_results() -> None:
 
     assert len(hits) == 1
     assert hits[0]["url"] == "https://example.org/source"
-    assert hits[0]["published_date"] == "2026-09-01T00:00:00Z"
+    assert hits[0]["published_date"] == "2026-09-01T00:00:00+00:00"
     assert hits[0]["retrieved_at"].endswith("+00:00")
     request = requests[0]
     assert request.url == "https://api.tavily.com/search"
@@ -94,3 +94,45 @@ async def test_tavily_rejects_malformed_or_unsafe_source_urls() -> None:
     ) as client:
         with pytest.raises(SearchProviderError):
             await TavilySearchProvider("test-key", client=client).search("query")
+
+
+@pytest.mark.parametrize(
+    ("provider_date", "expected"),
+    [
+        ("2026-09-01", "2026-09-01"),
+        ("2026-09-01T00:00:00Z", "2026-09-01T00:00:00+00:00"),
+        ("Tue, 11 Mar 2025 17:00:00 GMT", "2025-03-11T17:00:00+00:00"),
+        ("not a real date", None),
+        ("", None),
+    ],
+)
+def test_tavily_normalizes_publication_dates(provider_date: str, expected: str | None) -> None:
+    hit = TavilySearchProvider._parse_results(
+        {
+            "results": [
+                {
+                    "url": "https://example.org/source",
+                    "title": "Source",
+                    "content": "Details",
+                    "published_date": provider_date,
+                }
+            ]
+        }
+    )[0]
+    assert hit["published_date"] == expected
+
+
+def test_tavily_rejects_non_string_publication_date() -> None:
+    with pytest.raises(SearchProviderError, match="publication date"):
+        TavilySearchProvider._parse_results(
+            {
+                "results": [
+                    {
+                        "url": "https://example.org/source",
+                        "title": "Source",
+                        "content": "Details",
+                        "published_date": 20260901,
+                    }
+                ]
+            }
+        )

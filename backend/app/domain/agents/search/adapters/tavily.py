@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from contextlib import suppress
+from datetime import UTC, date, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -148,6 +150,7 @@ class TavilySearchProvider:
             published_date = result.get("published_date")
             if published_date is not None and not isinstance(published_date, str):
                 raise SearchProviderError("Tavily returned an invalid publication date")
+            published_date = TavilySearchProvider._normalize_published_date(published_date)
             hits.append(
                 {
                     "url": url,
@@ -158,3 +161,22 @@ class TavilySearchProvider:
                 }
             )
         return hits
+
+    @staticmethod
+    def _normalize_published_date(value: str | None) -> str | None:
+        """Keep only parseable ISO or RFC 2822 provider publication dates."""
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        with suppress(ValueError):
+            return date.fromisoformat(cleaned).isoformat()
+        iso_value = cleaned[:-1] + "+00:00" if cleaned.endswith("Z") else cleaned
+        with suppress(ValueError):
+            return datetime.fromisoformat(iso_value).isoformat()
+        with suppress(TypeError, ValueError, OverflowError):
+            parsed = parsedate_to_datetime(cleaned)
+            if parsed is not None:
+                return parsed.isoformat()
+        return None
