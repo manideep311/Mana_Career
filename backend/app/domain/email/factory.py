@@ -5,6 +5,5 @@ from app.domain.email.sender import ConsoleEmailSender, EmailSender
 
 
 def get_email_sender(settings: Settings) -> EmailSender:
-    if settings.email_provider == "console":
-        return ConsoleEmailSender()
-    raise NotImplementedError(f"{settings.email_provider} email adapter lands in a later phase")
+    # EMAIL_PROVIDER only accepts "console": nothing is sent outside the app.
+    return ConsoleEmailSender()

@@ -21,9 +21,11 @@ def _reset_structlog():
 
 @pytest.fixture
 def prod_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
+    # A complete production configuration (demo mode on the fake providers).
     for k, v in {
         "DATABASE_URL": "x", "DATABASE_URL_TEST": "x", "REDIS_URL": "x",
-        "JWT_SECRET": "x", "ENV": "prod",
+        "JWT_SECRET": "p" * 40, "ENV": "prod", "DEMO_MODE": "true",
+        "REFRESH_COOKIE_SECURE": "true", "SEARCH_PROVIDER": "none",
     }.items():
         monkeypatch.setenv(k, v)
     return Settings()

@@ -10,6 +10,7 @@ from app.api.v1 import (
     insights,
     jobs,
     matches,
+    meta,
     profile,
     resumes,
     roadmaps,
@@ -24,6 +25,7 @@ api_router.include_router(auth.router)
 api_router.include_router(eval.router)
 api_router.include_router(jobs.router)
 api_router.include_router(matches.router)
+api_router.include_router(meta.router)
 api_router.include_router(profile.router)
 api_router.include_router(resumes.router)
 api_router.include_router(roadmaps.router)

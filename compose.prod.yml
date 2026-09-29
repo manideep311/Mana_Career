@@ -5,6 +5,10 @@ x-backend-build: &backend-build
   target: prod
 
 x-backend-env: &backend-env
+  # Always production inside this stack: `environment:` overrides any ENV in
+  # .env, so the production configuration checks can never be skipped.
+  ENV: prod
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (run `just init-env`) before starting production}
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mana}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting production}@db:5432/${POSTGRES_DB:-mana}
   REDIS_URL: redis://redis:6379/0
   FILE_STORE_LOCAL_DIR: /app/var/files
@@ -168,3 +172,6 @@ networks:
     ipam:
       config:
         - subnet: ${PROXY_SUBNET:-172.30.0.0/24}
+          # Dynamic addresses come only from the upper half, so nginx's fixed
+          # NGINX_PROXY_IP (lower half) is never handed to api/frontend first.
+          ip_range: ${PROXY_DYNAMIC_RANGE:-172.30.0.128/25}

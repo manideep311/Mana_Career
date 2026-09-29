@@ -23,9 +23,15 @@ class LocalFileStore:
         Raises:
             ValueError: If key contains path traversal attempts
         """
-        if key.startswith("/") or ".." in Path(key).parts:
+        if key.startswith(("/", "\\")) or ".." in Path(key).parts or Path(key).is_absolute():
             raise ValueError(f"Path traversal not allowed: {key}")
-        return Path(self._root) / key
+        root = Path(self._root).resolve()
+        path = (root / key).resolve()
+        # Keys are server-generated; this is defence in depth against symlinks
+        # or drive-qualified keys escaping the store root.
+        if not path.is_relative_to(root):
+            raise ValueError(f"Path traversal not allowed: {key}")
+        return path
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> None:
         """Store data at the given key.

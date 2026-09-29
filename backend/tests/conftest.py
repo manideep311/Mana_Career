@@ -21,6 +21,8 @@ os.environ.setdefault("REFRESH_COOKIE_SECURE", "false")
 os.environ.setdefault("LLM_PROVIDER", "fake")
 os.environ.setdefault("EMBEDDINGS_PROVIDER", "fake")
 os.environ.setdefault("EMBED_DIM", "1024")
+# Agent tests exercise research against the deterministic fake search.
+os.environ.setdefault("SEARCH_PROVIDER", "fake")
 
 # Each `client` fixture instance gets its own source IP so the per-IP auth
 # rate-limit bucket (10/min) does not carry across tests when Redis is real (CI).

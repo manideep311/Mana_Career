@@ -82,8 +82,9 @@ cd backend && uv run ruff check . && uv run lint-imports && uv run mypy app && u
 ```
 
 `just` targets: `just up` / `just down` / `just migrate` / `just ci` / `just smoke`.
-Copy `.env.example` to `.env` first; the LLM/embeddings providers default to deterministic
-fakes so the whole stack runs offline.
+Run `just init-env` first: it writes `.env` and `backend/.env` from the templates with
+generated secrets (the app refuses placeholder JWT secrets). The LLM and embeddings
+providers default to deterministic fakes, so the whole stack runs offline.
 
 **Production:** `compose.prod.yml` builds multi-stage images and runs the stack
 behind an nginx reverse proxy with TLS, a one-shot Alembic `migrate` service,

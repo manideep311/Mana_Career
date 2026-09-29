@@ -7,7 +7,7 @@ LLM failure or an empty compression the node falls back to the hit titles.
 
 from typing import TYPE_CHECKING, Any
 
-from app.domain.agents.search.adapters.tavily import SearchProviderError
+from app.domain.agents.search.provider import SearchNotConfiguredError, SearchProviderError
 from app.domain.agents.state import ManaState
 from app.domain.agents.tools.registry import TOOL_SPECS, call_tool
 from app.domain.agents.tools.web_search import web_search
@@ -47,6 +47,12 @@ async def job_research(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]
             {"provider": deps.search, "query": f"{company} engineering culture", "k": 5},
             web_search,
         )
+    except SearchNotConfiguredError:
+        return {
+            "research_notes": [],
+            "_summary": "Web research isn't configured",
+            "_step_status": "skipped_fresh",
+        }
     except SearchProviderError:
         return {
             "research_notes": [],

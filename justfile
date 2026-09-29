@@ -1,5 +1,9 @@
 set shell := ["bash", "-uc"]
 
+# Create .env / backend/.env with generated secrets (run once).
+init-env:
+    bash ./scripts/init-env.sh
+
 install:
     cd backend && uv sync
     cd frontend && pnpm install

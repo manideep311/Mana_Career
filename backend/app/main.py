@@ -33,8 +33,15 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings)
+    # Interactive API docs are a development aid; production does not publish
+    # the schema or the Swagger/ReDoc UIs.
+    docs_enabled = settings.env != "prod"
     app = FastAPI(
-        title="Mana Career API", version="0.0.0", openapi_url="/api/openapi.json"
+        title="Mana Career API",
+        version="0.0.0",
+        openapi_url="/api/openapi.json" if docs_enabled else None,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
     )
     # add_middleware prepends, so the last added runs outermost:
     # RequestID -> CORS -> RateLimit -> router.

@@ -74,32 +74,126 @@ def test_resume_and_filestore_defaults(monkeypatch: pytest.MonkeyPatch):
     assert s.llm_model_extraction == "claude-haiku-4-5-20251001"
     assert s.upload_limit_per_hour == 20
 
-@pytest.mark.parametrize("secret", ["dev-only-change-me", "x" * 31])
-def test_prod_rejects_unsafe_jwt_secret(monkeypatch: pytest.MonkeyPatch, secret: str):
-    for key, value in _env(ENV="prod", JWT_SECRET=secret).items():
+_PROD_OK = {
+    "ENV": "prod",
+    "JWT_SECRET": "p" * 40,
+    "LLM_PROVIDER": "anthropic",
+    "ANTHROPIC_API_KEY": "test-anthropic-key",
+    "EMBEDDINGS_PROVIDER": "voyage",
+    "VOYAGE_API_KEY": "test-voyage-key",
+    "SEARCH_PROVIDER": "none",
+    "REFRESH_COOKIE_SECURE": "true",
+    "CORS_ORIGINS": "https://career.example",
+}
+
+
+def _apply(monkeypatch: pytest.MonkeyPatch, **over: str) -> None:
+    for key in ("SEARCH_PROVIDER", "DEMO_MODE", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in _env(**over).items():
         monkeypatch.setenv(key, value)
-    with pytest.raises(ValidationError) as exc:
+
+
+@pytest.mark.parametrize("env", ["dev", "test", "prod"])
+@pytest.mark.parametrize(
+    "secret", ["dev-only-change-me", "dev-only-anything", "change-me", "CHANGEME", "secret", "  "]
+)
+def test_placeholder_jwt_secret_rejected_in_every_environment(
+    monkeypatch: pytest.MonkeyPatch, env: str, secret: str
+):
+    _apply(monkeypatch, **{**_PROD_OK, "ENV": env, "JWT_SECRET": secret})
+    with pytest.raises(ValidationError, match="JWT_SECRET") as exc:
+        Settings()
+    if secret.strip():
+        assert secret not in str(exc.value)
+
+
+def test_prod_rejects_short_jwt_secret(monkeypatch: pytest.MonkeyPatch):
+    secret = "k" * 31
+    _apply(monkeypatch, **{**_PROD_OK, "JWT_SECRET": secret})
+    with pytest.raises(ValidationError, match="at least 32") as exc:
         Settings()
     assert secret not in str(exc.value)
 
 
-def test_prod_accepts_32_character_jwt_secret(monkeypatch: pytest.MonkeyPatch):
-    secret = "x" * 32
-    for key, value in _env(
-        ENV="prod", JWT_SECRET=secret, SEARCH_PROVIDER="tavily", SEARCH_API_KEY="test-key"
-    ).items():
-        monkeypatch.setenv(key, value)
-    assert Settings().jwt_secret.get_secret_value() == secret
+def test_prod_accepts_a_complete_configuration(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **_PROD_OK)
+    s = Settings()
+    assert s.env == "prod" and s.ai_generation_enabled and not s.demo_mode
 
 
-def test_prod_rejects_fake_search_provider(monkeypatch: pytest.MonkeyPatch):
-    for key, value in _env(ENV="prod", JWT_SECRET="x" * 32).items():
-        monkeypatch.setenv(key, value)
-    with pytest.raises(ValidationError, match="SEARCH_PROVIDER=tavily"):
+def test_prod_rejects_insecure_refresh_cookie(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "REFRESH_COOKIE_SECURE": "false"})
+    with pytest.raises(ValidationError, match="REFRESH_COOKIE_SECURE"):
         Settings()
 
 
-def test_dev_still_accepts_development_jwt_secret(monkeypatch: pytest.MonkeyPatch):
-    for key, value in _env(ENV="dev", JWT_SECRET="dev-only-change-me").items():
-        monkeypatch.setenv(key, value)
-    assert Settings().jwt_secret.get_secret_value() == "dev-only-change-me"
+def test_prod_rejects_wildcard_cors(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "CORS_ORIGINS": "*"})
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        Settings()
+
+
+def test_prod_rejects_fake_providers_without_demo_mode(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "LLM_PROVIDER": "fake", "EMBEDDINGS_PROVIDER": "fake"})
+    with pytest.raises(ValidationError, match="DEMO_MODE") as exc:
+        Settings()
+    assert "LLM_PROVIDER" in str(exc.value) and "EMBEDDINGS_PROVIDER" in str(exc.value)
+
+
+def test_prod_demo_mode_is_an_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):
+    _apply(
+        monkeypatch,
+        **{**_PROD_OK, "LLM_PROVIDER": "fake", "EMBEDDINGS_PROVIDER": "fake", "DEMO_MODE": "true"},
+    )
+    s = Settings()
+    assert s.demo_mode and not s.ai_generation_enabled
+
+
+def test_prod_does_not_require_web_search(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "SEARCH_PROVIDER": "none"})
+    assert Settings().search_provider == "none"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("LLM_PROVIDER", "openai"),
+        ("LLM_PROVIDER", "gemini"),
+        ("EMBEDDINGS_PROVIDER", "openai"),
+        ("EMBEDDINGS_PROVIDER", "local"),
+        ("SEARCH_PROVIDER", "brave"),
+        ("FILE_STORE", "s3"),
+        ("EMAIL_PROVIDER", "smtp"),
+    ],
+)
+def test_unimplemented_providers_fail_at_startup(
+    monkeypatch: pytest.MonkeyPatch, key: str, value: str
+):
+    _apply(monkeypatch, **{key: value})
+    with pytest.raises(ValidationError):
+        Settings()
+
+
+@pytest.mark.parametrize(
+    ("provider", "key_var"),
+    [
+        ("LLM_PROVIDER=anthropic", "ANTHROPIC_API_KEY"),
+        ("EMBEDDINGS_PROVIDER=voyage", "VOYAGE_API_KEY"),
+    ],
+)
+def test_real_providers_require_their_key(
+    monkeypatch: pytest.MonkeyPatch, provider: str, key_var: str
+):
+    name, value = provider.split("=")
+    _apply(monkeypatch, **{name: value})
+    with pytest.raises(ValidationError, match=key_var):
+        Settings()
+
+
+def test_trusted_proxy_cidrs_parsed_and_validated(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, TRUSTED_PROXY_CIDRS="172.30.0.0/24, 127.0.0.1/32")
+    assert Settings().trusted_proxy_cidrs == ["172.30.0.0/24", "127.0.0.1/32"]
+    _apply(monkeypatch, TRUSTED_PROXY_CIDRS="not-a-network")
+    with pytest.raises(ValidationError, match="TRUSTED_PROXY_CIDRS"):
+        Settings()

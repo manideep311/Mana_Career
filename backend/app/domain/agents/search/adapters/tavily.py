@@ -10,20 +10,14 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.domain.agents.search.provider import SearchHit
+from app.domain.agents.search.provider import SearchHit, SearchProviderError
+
+__all__ = ["SearchProviderError", "TavilySearchProvider"]
 
 _SEARCH_URL = "https://api.tavily.com/search"
 _TIMEOUT_SECONDS = 10.0
 _MAX_ATTEMPTS = 3
 _MAX_RETRY_AFTER_SECONDS = 2.0
-
-
-class SearchProviderError(RuntimeError):
-    """A safe, non-sensitive error from a live search provider."""
-
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
-        super().__init__(message)
-        self.status_code = status_code
 
 
 class TavilySearchProvider:

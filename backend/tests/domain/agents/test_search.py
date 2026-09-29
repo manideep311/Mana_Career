@@ -1,8 +1,10 @@
 import pytest
 
+from app.domain.agents.search.adapters.disabled import DisabledSearchProvider
 from app.domain.agents.search.adapters.fake import FakeSearchProvider
 from app.domain.agents.search.adapters.tavily import TavilySearchProvider
 from app.domain.agents.search.factory import get_search_provider
+from app.domain.agents.search.provider import SearchNotConfiguredError
 
 
 async def test_fake_search_is_deterministic_and_bounded():
@@ -23,7 +25,9 @@ def test_factory_fake_and_tavily():
 
     base = dict(database_url="postgresql+asyncpg://x", database_url_test="postgresql+asyncpg://x",
                 redis_url="redis://x", jwt_secret="x")
-    assert isinstance(get_search_provider(Settings(**base)), FakeSearchProvider)
+    assert isinstance(
+        get_search_provider(Settings(**base, search_provider="fake")), FakeSearchProvider
+    )
     provider = get_search_provider(
         Settings(**base, search_provider="tavily", search_api_key="test-key")
     )
@@ -37,3 +41,14 @@ def test_tavily_requires_api_key():
                 redis_url="redis://x", jwt_secret="x")
     with pytest.raises(ValueError, match="SEARCH_API_KEY"):
         Settings(**base, search_provider="tavily")
+
+
+async def test_disabled_search_reports_not_configured():
+    from app.core.config import Settings
+
+    base = dict(database_url="postgresql+asyncpg://x", database_url_test="postgresql+asyncpg://x",
+                redis_url="redis://x", jwt_secret="x")
+    provider = get_search_provider(Settings(**base, search_provider="none"))
+    assert isinstance(provider, DisabledSearchProvider)
+    with pytest.raises(SearchNotConfiguredError):
+        await provider.search("anything")

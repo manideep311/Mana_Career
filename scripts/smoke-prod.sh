@@ -19,8 +19,12 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -k "$base_https/health/ready")
 [ "$code" = "200" ] || fail "/health/ready returned $code"
 
 # 4. API reachable through the /api/ location
+curl -fsSk "$base_https/api/v1/meta" | grep -q '"demo_mode"' || fail "/api/v1/meta via nginx"
+
+# 4b. The API schema is not published in production (nginx never routed /docs
+#     to the API; the schema was reachable under /api/)
 code=$(curl -s -o /dev/null -w '%{http_code}' -k "$base_https/api/openapi.json")
-[ "$code" = "200" ] || fail "/api/openapi.json returned $code"
+[ "$code" = "404" ] || fail "/api/openapi.json should be 404 in production (got $code)"
 
 # 5. frontend (Next.js standalone) served at /
 code=$(curl -s -o /dev/null -w '%{http_code}' -k "$base_https/")

@@ -125,8 +125,9 @@ jobs:
           sed -i 's/^ENV=.*/ENV=prod/' .env
           sed -i 's/^JWT_SECRET=.*/JWT_SECRET=ci-only-jwt-secret-that-is-never-used-outside-ci/' .env
           sed -i 's/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci-only-postgres-password/' .env
-          sed -i 's/^SEARCH_PROVIDER=.*/SEARCH_PROVIDER=tavily/' .env
-          sed -i 's/^SEARCH_API_KEY=.*/SEARCH_API_KEY=ci-only-placeholder-not-a-live-credential/' .env
+          # The disposable stack has no provider keys: run it as a labelled demo.
+          sed -i 's/^DEMO_MODE=.*/DEMO_MODE=true/' .env
+          sed -i 's/^SEARCH_PROVIDER=.*/SEARCH_PROVIDER=none/' .env
 
       - name: Validate production Compose configuration
         run: docker compose -f compose.prod.yml config --quiet

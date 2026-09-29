@@ -7,15 +7,11 @@ from app.domain.embeddings.provider import EmbeddingsProvider
 
 
 def get_embeddings_provider(settings: Settings) -> EmbeddingsProvider:
-    if settings.embeddings_provider == "fake":
-        return FakeEmbeddingsProvider(settings.embed_dim, settings.embed_model)
-    if settings.embeddings_provider == "voyage":
-        key = settings.voyage_api_key.get_secret_value() if settings.voyage_api_key else ""
-        if not key:
-            raise RuntimeError("VOYAGE_API_KEY is required for the voyage embeddings provider")
+    # Settings validation guarantees the Voyage key is present.
+    if settings.embeddings_provider == "voyage" and settings.voyage_api_key is not None:
         return VoyageEmbeddingsProvider(
-            api_key=key, model=settings.embed_model, dim=settings.embed_dim
+            api_key=settings.voyage_api_key.get_secret_value(),
+            model=settings.embed_model,
+            dim=settings.embed_dim,
         )
-    raise NotImplementedError(
-        f"{settings.embeddings_provider!r} embeddings adapter lands in Phase 6"
-    )
+    return FakeEmbeddingsProvider(settings.embed_dim, settings.embed_model)
