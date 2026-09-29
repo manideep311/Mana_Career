@@ -33,10 +33,13 @@ export interface AuthContextValue {
   }) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (body: {
-    old_password: string;
+    current_password: string;
     new_password: string;
   }) => Promise<void>;
 }
+
+/** Name of the cross-tab Web Lock that serializes token refreshes. */
+export const REFRESH_LOCK = "mana-career-token-refresh";
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -57,7 +60,12 @@ export function useAuth(): AuthContextValue {
  * to load the current user. Any `ProblemError` there means "not signed in".
  *
  * `authedFetch` injects `Authorization: Bearer <token>` and, on a 401, does a
- * single silent `bootstrap()` + retry before giving up and going `anon`.
+ * single silent token refresh + retry before giving up and going `anon`.
+ *
+ * Refreshes are single-flight: every request that hits a 401 at the same time
+ * awaits one shared `POST /auth/refresh`, and a Web Lock serializes refreshes
+ * across tabs (they share the refresh cookie). Rotating the same refresh token
+ * twice would otherwise look like token theft to the server.
  *
  * `authedStream` is the same bearer + one-refresh-retry dance but returns the
  * raw `Response` (body never read) so callers can stream it — e.g. an SSE hook
@@ -68,17 +76,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<UserOut | null>(null);
 
-  const bootstrap = useCallback(async () => {
-    const access = await apiFetch<AccessResponse>("/api/v1/auth/refresh", {
-      method: "POST",
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+
+  const refreshAccess = useCallback((): Promise<void> => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const doRefresh = async () => {
+      const access = await apiFetch<AccessResponse>("/api/v1/auth/refresh", {
+        method: "POST",
+      });
+      tokenRef.current = access.access_token;
+    };
+    const locks =
+      typeof navigator !== "undefined" && "locks" in navigator
+        ? navigator.locks
+        : undefined;
+    const run = locks ? locks.request(REFRESH_LOCK, doRefresh) : doRefresh();
+    const shared = Promise.resolve(run).finally(() => {
+      refreshInFlight.current = null;
     });
-    tokenRef.current = access.access_token;
+    refreshInFlight.current = shared;
+    return shared;
+  }, []);
+
+  const bootstrap = useCallback(async () => {
+    await refreshAccess();
     const me = await apiFetch<UserOut>("/api/v1/auth/me", {
-      headers: { Authorization: `Bearer ${access.access_token}` },
+      headers: { Authorization: `Bearer ${tokenRef.current}` },
     });
     setUser(me);
     setStatus("authed");
-  }, []);
+  }, [refreshAccess]);
 
   const authedFetch = useCallback(
     <T,>(path: string, init?: RequestInit): Promise<T> => {
@@ -96,10 +123,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw err;
         }
         try {
-          await bootstrap();
-        } catch (bootErr) {
+          await refreshAccess();
+        } catch (refreshErr) {
           setStatus("anon");
-          throw bootErr;
+          throw refreshErr;
         }
         return withAuth().catch((retryErr: unknown) => {
           if (retryErr instanceof ProblemError && retryErr.status === 401) {
@@ -109,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       });
     },
-    [bootstrap],
+    [refreshAccess],
   ) as Fetcher;
 
   const authedStream = useCallback(
@@ -126,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await go();
       if (res.status !== 401) return res;
       try {
-        await bootstrap();
+        await refreshAccess();
       } catch (err) {
         setStatus("anon");
         throw err;
@@ -135,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (retry.status === 401) setStatus("anon");
       return retry;
     },
-    [bootstrap],
+    [refreshAccess],
   );
 
   const api = useMemo(() => makeApi(authedFetch), [authedFetch]);
@@ -172,8 +199,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   const changePassword = useCallback(
-    async (body: { old_password: string; new_password: string }) => {
-      await api.auth.changePassword(body);
+    async (body: { current_password: string; new_password: string }) => {
+      // The server ends every other session and starts a new one for this tab.
+      const res = await api.auth.changePassword(body);
+      tokenRef.current = res.access_token;
     },
     [api],
   );

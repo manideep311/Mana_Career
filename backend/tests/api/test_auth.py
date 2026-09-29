@@ -65,10 +65,11 @@ async def test_refresh_rotates_cookie(client):
     assert second.status_code == 200
 
 
-async def test_refresh_reuse_is_401_and_kills_family(client):
+async def test_refresh_reuse_is_401_and_kills_family(client, db_session):
     reg = await _register(client, email="reuse@example.com")
     stolen = reg.cookies.get(COOKIE)
     await client.post(f"{BASE}/refresh")  # legitimate rotation
+    await _age_rotation(db_session, stolen)  # the thief replays after the grace window
     replay = await client.post(f"{BASE}/refresh", cookies={COOKIE: stolen})
     assert replay.status_code == 401 and replay.json()["code"] == "refresh_reuse"
     # family is dead: neither the stolen token nor the jar's rotated token works
@@ -114,3 +115,31 @@ async def test_auth_events_are_audited(client, db_session):
     # that raises 401, so get_session rolls it back in production (durable
     # failed-attempt auditing is a Phase 13 concern).
     assert {"auth.register", "auth.login"}.issubset(actions)
+
+
+async def _age_rotation(db_session, raw: str) -> None:
+    import datetime as dt
+
+    from sqlalchemy import select
+
+    from app.domain.auth.service import REFRESH_REUSE_GRACE
+    from app.domain.auth.tokens import hash_refresh_token
+    from app.models.auth import RefreshToken
+
+    row = (await db_session.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(raw))
+    )).scalar_one()
+    row.revoked_at = dt.datetime.now(dt.UTC) - REFRESH_REUSE_GRACE - dt.timedelta(seconds=1)
+    await db_session.flush()
+
+
+async def test_parallel_refresh_with_the_same_cookie_keeps_both_tabs_signed_in(client):
+    reg = await _register(client, email="tabs@example.com")
+    cookie = reg.cookies.get(COOKIE)
+    tab_a = await client.post(f"{BASE}/refresh", cookies={COOKIE: cookie})
+    tab_b = await client.post(f"{BASE}/refresh", cookies={COOKIE: cookie})
+    assert tab_a.status_code == 200 and tab_b.status_code == 200
+    for tab in (tab_a, tab_b):
+        token = tab.json()["access_token"]
+        me = await client.get(f"{BASE}/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200

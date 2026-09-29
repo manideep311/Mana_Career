@@ -16,7 +16,7 @@ os.environ.setdefault(
 )
 os.environ.setdefault("DATABASE_URL_TEST", os.environ["DATABASE_URL"])
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
-os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-for-the-pytest-suite")
 os.environ.setdefault("REFRESH_COOKIE_SECURE", "false")
 os.environ.setdefault("LLM_PROVIDER", "fake")
 os.environ.setdefault("EMBEDDINGS_PROVIDER", "fake")

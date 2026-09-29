@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import audit
@@ -35,6 +35,13 @@ class AccessResult:
     access_token: str
     expires_in: int
     refresh_token: str
+
+
+# A second refresh presenting a token that was rotated moments ago is almost
+# always a parallel request (another tab, or requests racing at token expiry),
+# not theft. Inside this window it gets its own token in the same session
+# instead of revoking the session.
+REFRESH_REUSE_GRACE = dt.timedelta(seconds=15)
 
 
 def _now() -> dt.datetime:
@@ -78,8 +85,23 @@ class AuthService:
         )
         self.session.add(row)
         await self.session.flush()
-        access, expires_in = create_access_token(user.id, settings=self.settings)
+        access, expires_in = create_access_token(user.id, session_id=fam, settings=self.settings)
         return access, expires_in, raw, row
+
+    async def is_session_live(self, user_id: uuid.UUID, session_id: uuid.UUID) -> bool:
+        """True while the sign-in behind an access token has a usable refresh token."""
+        return bool(
+            await self.session.scalar(
+                select(
+                    exists().where(
+                        RefreshToken.family_id == session_id,
+                        RefreshToken.user_id == user_id,
+                        RefreshToken.revoked_at.is_(None),
+                        RefreshToken.expires_at > _now(),
+                    )
+                )
+            )
+        )
 
     async def _audit(
         self,
@@ -141,15 +163,19 @@ class AuthService:
     async def rotate(
         self, raw_refresh: str, *, ip: str | None, user_agent: str | None,
     ) -> AccessResult:
+        # Lock the presented token so concurrent refreshes are serialized: the
+        # second one sees the first one's rotation instead of racing it.
         row = (
             await self.session.execute(
-                select(RefreshToken).where(
-                    RefreshToken.token_hash == hash_refresh_token(raw_refresh)
-                )
+                select(RefreshToken)
+                .where(RefreshToken.token_hash == hash_refresh_token(raw_refresh))
+                .with_for_update()
             )
         ).scalar_one_or_none()
         if row is None:
             raise AuthError(detail="Please sign in again.", code="invalid_refresh")
+        if row.revoked_at is not None and await self._within_reuse_grace(row):
+            return await self._issue_sibling(row, ip=ip, user_agent=user_agent)
         if row.revoked_at is not None:
             # Reuse of an already-rotated token => the family is compromised.
             # Persist the revoke BEFORE raising: get_session rolls back on the
@@ -164,14 +190,40 @@ class AuthService:
             raise AuthError(detail="Please sign in again.", code="refresh_reuse")
         if row.expires_at <= _now():
             raise AuthError(detail="Please sign in again.", code="expired_refresh")
-        user = await self.session.get(User, row.user_id)
-        assert user is not None
+        user = await self._active_user(row.user_id)
         access, expires_in, raw, new_row = await self._issue(
             user, ip=ip, user_agent=user_agent, family_id=row.family_id
         )
         row.revoked_at = _now()
         row.replaced_by_id = new_row.id
         await self._audit("auth.refresh", user_id=row.user_id, ip=ip, user_agent=user_agent)
+        return AccessResult(access, expires_in, raw)
+
+    async def _active_user(self, user_id: uuid.UUID) -> User:
+        user = await self.session.get(User, user_id)
+        if user is None or user.status != "active":
+            raise AuthError(detail="Please sign in again.", code="invalid_refresh")
+        return user
+
+    async def _within_reuse_grace(self, row: RefreshToken) -> bool:
+        """Rotated (not logged out) moments ago, and the session is still live."""
+        return (
+            row.replaced_by_id is not None
+            and row.revoked_at is not None
+            and _now() - row.revoked_at <= REFRESH_REUSE_GRACE
+            and await self.is_session_live(row.user_id, row.family_id)
+        )
+
+    async def _issue_sibling(
+        self, row: RefreshToken, *, ip: str | None, user_agent: str | None
+    ) -> AccessResult:
+        user = await self._active_user(row.user_id)
+        access, expires_in, raw, _ = await self._issue(
+            user, ip=ip, user_agent=user_agent, family_id=row.family_id
+        )
+        await self._audit(
+            "auth.refresh_parallel", user_id=row.user_id, ip=ip, user_agent=user_agent
+        )
         return AccessResult(access, expires_in, raw)
 
     async def logout(self, raw_refresh: str | None) -> None:

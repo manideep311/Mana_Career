@@ -21,7 +21,8 @@ import datetime as dt
 import jwt
 
 from app.core.config import get_settings
-from app.domain.auth.tokens import create_access_token
+from app.domain.auth.service import AuthService
+from app.domain.auth.tokens import AUDIENCE, ISSUER
 from app.models.user import User
 
 _PROFILE = "/api/v1/profile"
@@ -40,8 +41,10 @@ def _forge(payload_overrides, *, secret=None):
     """Sign an access-token-shaped JWT, letting the caller override any claim."""
     s = get_settings()
     now = int(dt.datetime.now(dt.UTC).timestamp())
-    payload = {"sub": "00000000-0000-0000-0000-000000000001", "type": "access",
-               "iat": now, "exp": now + 3600, **payload_overrides}
+    payload = {"iss": ISSUER, "aud": AUDIENCE,
+               "sub": "00000000-0000-0000-0000-000000000001",
+               "sid": "00000000-0000-0000-0000-00000000000a", "type": "access",
+               "jti": "forged", "iat": now, "exp": now + 3600, **payload_overrides}
     secret = secret or s.jwt_secret.get_secret_value()
     return jwt.encode(payload, secret, algorithm="HS256")
 
@@ -104,8 +107,63 @@ async def test_admin_passes_the_gate(client, db_session):
     )
     db_session.add(admin)
     await db_session.flush()
-    tok, _ = create_access_token(admin.id, settings=get_settings())
+    # A real sign-in session for the admin (the password hash is unusable).
+    tok, _, _, _ = await AuthService(db_session)._issue(admin, ip=None, user_agent=None)
     r = await client.get(_ADMIN_ROUTE, headers={"Authorization": f"Bearer {tok}"})
     # The admin gate opened: not 401 (auth passed) and not 403 (is_admin True).
     assert r.status_code not in (401, 403)
     assert r.status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# Session revocation: access tokens die with their sign-in session
+# --------------------------------------------------------------------------- #
+async def _login(client, email):
+    r = await client.post(
+        "/api/v1/auth/login", json={"email": email, "password": "correct-passphrase"}
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]
+
+
+def _bearer(tok):
+    return {"Authorization": f"Bearer {tok}"}
+
+
+async def test_logout_revokes_the_access_token_immediately(client, db_session):
+    await _register(client, "authz-logout@x.com")
+    tok = await _login(client, "authz-logout@x.com")
+    assert (await client.get(_PROFILE, headers=_bearer(tok))).status_code == 200
+
+    assert (await client.post("/api/v1/auth/logout")).status_code == 204
+
+    r = await client.get(_PROFILE, headers=_bearer(tok))
+    assert r.status_code == 401
+    assert r.json()["code"] == "session_revoked"
+
+
+async def test_token_for_an_unknown_session_is_rejected(client, db_session):
+    await _register(client, "authz-sid@x.com")
+    tok = await _login(client, "authz-sid@x.com")
+    me = await client.get("/api/v1/auth/me", headers=_bearer(tok))
+    forged = _forge({"sub": me.json()["id"]})  # right user and secret, invented session
+    r = await client.get(_PROFILE, headers=_bearer(forged))
+    assert r.status_code == 401
+    assert r.json()["code"] == "session_revoked"
+
+
+async def test_password_change_ends_other_sessions(client, db_session):
+    await _register(client, "authz-pw@x.com")
+    other_device = await _login(client, "authz-pw@x.com")
+    this_device = await _login(client, "authz-pw@x.com")
+
+    r = await client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": "correct-passphrase", "new_password": "a-new-passphrase-1"},
+        headers=_bearer(this_device),
+    )
+    assert r.status_code == 200, r.text
+    fresh = r.json()["access_token"]
+
+    assert (await client.get(_PROFILE, headers=_bearer(other_device))).status_code == 401
+    assert (await client.get(_PROFILE, headers=_bearer(fresh))).status_code == 200

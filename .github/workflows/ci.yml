@@ -29,7 +29,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
-      JWT_SECRET: ci-secret
+      JWT_SECRET: ci-only-jwt-secret-for-the-backend-test-suite
       # Phase 13 floor: raised from 55. Total is ~88%; the closeout sets the highest safe value.
       PYTEST_ADDOPTS: "--cov-fail-under=80"
     defaults:
@@ -63,7 +63,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
-      JWT_SECRET: ci-secret
+      JWT_SECRET: ci-only-jwt-secret-for-the-backend-test-suite
     defaults:
       run:
         working-directory: backend
@@ -80,14 +80,14 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
           EMBEDDINGS_PROVIDER: fake
           LLM_PROVIDER: fake
-          JWT_SECRET: ci-not-secret
+          JWT_SECRET: ci-only-jwt-secret-for-the-eval-harness-jobs
           REDIS_URL: redis://localhost:6379/0
       - run: uv run python -m eval.run generation --write-db --provider fake
         env:
           DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
           EMBEDDINGS_PROVIDER: fake
           LLM_PROVIDER: fake
-          JWT_SECRET: ci-not-secret
+          JWT_SECRET: ci-only-jwt-secret-for-the-eval-harness-jobs
           REDIS_URL: redis://localhost:6379/0
 
   frontend:

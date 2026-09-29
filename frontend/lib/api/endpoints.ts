@@ -77,8 +77,8 @@ export function makeApi(f: Fetcher) {
       async me() {
         return f<UserOut>("/api/v1/auth/me");
       },
-      async changePassword(body: { old_password: string; new_password: string }) {
-        return f<void>("/api/v1/auth/password/change", json("POST", body));
+      async changePassword(body: { current_password: string; new_password: string }) {
+        return f<AccessResponse>("/api/v1/auth/password/change", json("POST", body));
       },
     },
     profile: {

@@ -44,7 +44,7 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
 
 - [x] A. Config & JWT hardening (R3, R4, provider validation, R1, R2)
 - [x] B. Worker retry/backoff/final-failure + stuck-job sweeper (R10) + real-ARQ tests
-- [ ] C. Sessions: refresh race (FOR UPDATE + grace), `sid`/`iss`/`aud`, revocation (R5)
+- [x] C. Sessions: refresh race (FOR UPDATE + grace), `sid`/`iss`/`aud`, revocation (R5)
 - [ ] D. Rate limiter (R8) + client-IP helper
 - [ ] E. Upload body guard (R9)
 - [ ] F. Ops: compose limits/logging/healthchecks/backups; nginx headers (R6); CI hardening
@@ -74,3 +74,15 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
   permanent); parse_resume Retry/terminal/permanent + real-worker retry to 'parsed'; score_match
   retry/terminal/recovery; sweeper; agent-limits test now asserts Retry. Finding: 'preparing'
   applications never exist (prep node creates the row as awaiting_approval) — nothing to release.
+- af485cd CI: 561 passed; the 5 real-ARQ tests failed because Worker(queue_name) defaults to the global
+  "arq:queue" (polled the wrong queue) and nested fns register by __qualname__ — fixed in 6c37e2a,
+  verified locally against a real ARQ Worker on fakeredis.
+- Workstream C: access tokens carry iss/aud/sid/jti (all required); get_current_user rejects tokens whose
+  sign-in (refresh family) has no live token -> logout/password-change/reuse end access immediately;
+  rotate() SELECT ... FOR UPDATE + 15 s grace for parallel refreshes (sibling token, audit
+  auth.refresh_parallel); disabled users can't refresh. Frontend: single-flight refreshAccess shared by
+  all concurrent 401s + Web Lock across tabs; 401 path no longer re-fetches /me. Fixed latent contract
+  bug: changePassword sent old_password (API wants current_password) and ignored the new token.
+  Tests: token claims, API revocation (logout/unknown sid/password change), grace, logged-out no-grace,
+  FOR UPDATE emitted, real 4-way concurrent refresh in separate transactions, frontend single-flight
+  (verified to fail on the old provider).
