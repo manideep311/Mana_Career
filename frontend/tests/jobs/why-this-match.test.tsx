@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   result: {
     match: null,
     isLoading: false,
+    stalled: false,
     refetch: vi.fn(),
   } as UseMatchResult,
 }));
@@ -60,7 +61,7 @@ const rustGap: SkillGap = {
 
 describe("WhyThisMatch", () => {
   it("renders the ready panel: band word, a dimension label, a skill gap, and the AI explanation", async () => {
-    h.result = { match: readyMatch, isLoading: false, refetch: vi.fn() };
+    h.result = { match: readyMatch, isLoading: false, stalled: false, refetch: vi.fn() };
 
     renderWithProviders(<WhyThisMatch jobId="j1" />, {
       api: {
@@ -78,12 +79,28 @@ describe("WhyThisMatch", () => {
   });
 
   it("offers a 'Score this job' button when there is no match yet", () => {
-    h.result = { match: null, isLoading: false, refetch: vi.fn() };
+    h.result = { match: null, isLoading: false, stalled: false, refetch: vi.fn() };
 
     renderWithProviders(<WhyThisMatch jobId="j1" />);
 
     expect(
       screen.getByRole("button", { name: /score this job/i }),
     ).toBeInTheDocument();
+  });
+
+  it("offers a retry instead of spinning when scoring has stalled", () => {
+    const refetch = vi.fn();
+    h.result = {
+      match: { ...readyMatch, status: "scoring" },
+      isLoading: false,
+      stalled: true,
+      refetch,
+    };
+
+    renderWithProviders(<WhyThisMatch jobId="j1" />);
+
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
+    screen.getByRole("button", { name: /check again/i }).click();
+    expect(refetch).toHaveBeenCalled();
   });
 });

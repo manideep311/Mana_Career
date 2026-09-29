@@ -33,7 +33,7 @@ const MET_THRESHOLD = 0.6;
  */
 export function WhyThisMatch({ jobId }: { jobId: string }) {
   const { api } = useAuth();
-  const { match, isLoading, refetch } = useMatch(jobId);
+  const { match, isLoading, stalled, refetch } = useMatch(jobId);
 
   const componentsQuery = useQuery({
     queryKey: [...qk.match(jobId), "components"],
@@ -58,6 +58,19 @@ export function WhyThisMatch({ jobId }: { jobId: string }) {
           <p>See how you match this role against your profile.</p>
           <Button type="button" onClick={refetch}>
             Score this job
+          </Button>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  if (match.status === "scoring" && stalled) {
+    return (
+      <Card>
+        <CardBody className="flex flex-col items-start gap-3" role="status">
+          <p>Scoring is taking longer than usual.</p>
+          <Button type="button" variant="outline" onClick={refetch}>
+            Check again
           </Button>
         </CardBody>
       </Card>

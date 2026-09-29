@@ -10,9 +10,17 @@ export interface ResumeEventState {
   message: string | null;
   done: boolean;
   error: string | null;
+  /** When the last status update arrived (ms since epoch), for stall hints. */
+  updatedAt: number | null;
 }
 
-const INITIAL: ResumeEventState = { status: null, message: null, done: false, error: null };
+const INITIAL: ResumeEventState = {
+  status: null,
+  message: null,
+  done: false,
+  error: null,
+  updatedAt: null,
+};
 const MAX_ATTEMPTS = 5;
 
 interface Frame {
@@ -82,6 +90,7 @@ export function useResumeEvents(
               ...s,
               status: (frame.data.status as ResumeStatus) ?? s.status,
               message: (frame.data.message as string) ?? s.message,
+              updatedAt: Date.now(),
             }));
           } else if (frame.event === "done") {
             setState((s) => ({ ...s, done: true, status: (frame.data.status as ResumeStatus) ?? s.status }));

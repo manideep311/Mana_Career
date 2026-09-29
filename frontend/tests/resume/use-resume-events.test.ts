@@ -52,7 +52,9 @@ describe("useResumeEvents", () => {
     const authedStream = vi.fn();
     const { result } = renderHook(() => useResumeEvents(null), { wrapper: wrap(authedStream) });
     expect(authedStream).not.toHaveBeenCalled();
-    expect(result.current).toEqual({ status: null, message: null, done: false, error: null });
+    expect(result.current).toEqual({
+      status: null, message: null, done: false, error: null, updatedAt: null,
+    });
   });
 
   it("reconnects after an early disconnect and resumes", async () => {
