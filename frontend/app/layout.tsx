@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Newsreader } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/providers/AuthProvider";
@@ -12,17 +12,25 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-// Display serif for headings only; body copy stays in Inter.
-const newsreader = Newsreader({
+// Bold display face for headings only; body copy stays in Inter.
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-display-serif",
+  variable: "--font-display-sans",
 });
 
+const DESCRIPTION =
+  "A calm career companion: see where your experience can take you, what to work on next, and take the next step.";
+
+// Link previews need absolute image URLs; the public address is set at build
+// time (compose passes APP_BASE_URL). The images themselves are the
+// `opengraph-image.jpg` / `twitter-image.jpg` files next to this layout.
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: "Mana Career",
-  description:
-    "A calm career companion: see where your experience can take you, what to work on next, and take the next step.",
+  description: DESCRIPTION,
+  openGraph: { type: "website", siteName: "Mana Career", title: "Mana Career", description: DESCRIPTION },
+  twitter: { card: "summary_large_image", title: "Mana Career", description: DESCRIPTION },
 };
 
 export default function RootLayout({
@@ -32,7 +40,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${newsreader.variable}`}>
+      <body className={`${inter.variable} ${jakarta.variable}`}>
         <QueryProvider>
           <AuthProvider>
             <Toaster>{children}</Toaster>

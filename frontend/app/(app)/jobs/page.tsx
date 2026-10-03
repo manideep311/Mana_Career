@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { AddJobDialog } from "@/components/jobs/AddJobDialog";
 import { JobCard } from "@/components/jobs/JobCard";
 import { JobFilters } from "@/components/jobs/JobFilters";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import type { JobQuery } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -103,6 +105,7 @@ export default function JobsPage() {
     if (data.items.length === 0) {
       return (
         <EmptyState
+          art={PAGE_ART.emptyJobs}
           title="No jobs match"
           description="Try clearing filters, or paste a job description to add one."
         />
@@ -148,27 +151,25 @@ export default function JobsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold text-text">Jobs</h1>
-          <p className="text-sm text-text-muted">
-            Browse open roles, or paste a job description to track one of your
-            own.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Phase 5: kick off a full re-score of every tracked job */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => recomputeMut.mutate()}
-            disabled={recomputeMut.isPending}
-          >
-            Match all
-          </Button>
-          <AddJobDialog />
-        </div>
-      </header>
+      <PageBanner
+        art={PAGE_ART.jobs}
+        title="Jobs"
+        description="Browse open roles, or paste a job description to track one of your own."
+        actions={
+          <>
+            {/* Phase 5: kick off a full re-score of every tracked job */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => recomputeMut.mutate()}
+              disabled={recomputeMut.isPending}
+            >
+              Match all
+            </Button>
+            <AddJobDialog />
+          </>
+        }
+      />
 
       <JobFilters />
 

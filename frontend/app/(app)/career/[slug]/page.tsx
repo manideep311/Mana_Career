@@ -11,10 +11,12 @@ import { Section } from "@/components/career/Section";
 import { SkillStepCard } from "@/components/career/SkillStepCard";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProblemError } from "@/lib/api/fetcher";
 import type { CareerPath, PathAction, PathSkill } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -132,6 +134,7 @@ export default function CareerPathPage() {
         {back}
         {notFound ? (
           <EmptyState
+            art={PAGE_ART.notFound}
             title="We couldn't find that path"
             description="It may no longer match the roles we know about."
             action={
@@ -150,14 +153,15 @@ export default function CareerPathPage() {
   const path = pathQ.data;
   return (
     <article className="flex flex-col gap-10">
-      <header className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         {back}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-3xl text-text">{path.title}</h1>
-          <FitChip fit={path.fit} label={path.fit_label} />
-        </div>
-        {path.summary ? <p className="text-base text-text-muted">{path.summary}</p> : null}
-      </header>
+        <PageBanner
+          art={PAGE_ART.careerPath}
+          title={path.title}
+          badge={<FitChip fit={path.fit} label={path.fit_label} />}
+          description={path.summary || undefined}
+        />
+      </div>
 
       <Section id="why" title="Why this path">
         <p className="text-base leading-relaxed text-text">{path.why}</p>

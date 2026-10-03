@@ -19,11 +19,8 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
-      <Link
-        href="/dashboard"
-        className="px-5 py-5 text-lg font-semibold tracking-tight text-text"
-      >
-        Mana Career
+      <Link href="/dashboard" className="px-5 py-5 font-display text-lg">
+        <span className="text-accent">Mana</span> <span className="text-text">Career</span>
       </Link>
 
       <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-3">

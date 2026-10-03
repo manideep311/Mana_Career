@@ -13,6 +13,7 @@ import {
 
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { ExtractionReview } from "@/components/resume/ExtractionReview";
 import { ResumeAnalysisPanel } from "@/components/resume/ResumeAnalysisPanel";
 import { ResumeFailed } from "@/components/resume/ResumeFailed";
@@ -27,6 +28,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toaster";
 import { ProblemError } from "@/lib/api/fetcher";
 import type { ResumeExtraction, ResumeOut, ResumeStatus } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 import { useResumeEvents } from "@/hooks/useResumeEvents";
@@ -430,14 +432,11 @@ export default function ResumePage() {
   return (
     <RequireAuth>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-display text-3xl text-text">Your résumé</h1>
-          <p className="text-sm text-text-muted">
-            Upload a PDF. We read it, map your experience, and show you what
-            to strengthen. Nothing is invented: every suggestion points back to
-            your own words.
-          </p>
-        </header>
+        <PageBanner
+          art={PAGE_ART.resume}
+          title="Your résumé"
+          description="Upload a PDF. We read it, map your experience, and show you what to strengthen. Nothing is invented: every suggestion points back to your own words."
+        />
         {body()}
       </div>
     </RequireAuth>

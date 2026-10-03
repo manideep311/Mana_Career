@@ -32,10 +32,12 @@ export const qk = {
   applications: (params?: Record<string, unknown>) =>
     ["applications", "list", params ?? {}] as const,
   applicationTimeline: (id: string) => ["application", id, "timeline"] as const,
+  applicationDelivery: (id: string) => ["application", id, "delivery"] as const,
   approval: (id: string) => ["approval", id] as const,
   approvals: (status?: string) => ["approvals", status ?? null] as const,
   insights: ["insights"] as const,
   meta: ["meta"] as const,
+  catalogStats: ["catalog", "stats"] as const,
   careerOverview: ["career", "overview"] as const,
   careerPaths: ["career", "paths"] as const,
   careerPath: (slug: string) => ["career", "path", slug] as const,

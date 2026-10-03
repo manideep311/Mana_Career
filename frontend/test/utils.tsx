@@ -166,6 +166,7 @@ export function makeAuthValue(
     register: vi.fn(async () => {}),
     logout: vi.fn(async () => {}),
     changePassword: vi.fn(async () => {}),
+    reloadUser: vi.fn(async () => {}),
   };
   return deepMerge(defaults, opts.authValue);
 }

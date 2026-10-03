@@ -3,6 +3,8 @@ export interface UserOut {
   email: string;
   full_name: string;
   is_admin: boolean;
+  /** The address was confirmed through an emailed link. */
+  email_verified: boolean;
   created_at: string;
 }
 
@@ -520,6 +522,24 @@ export interface ApprovalRequestList {
 export interface ApprovalDecision {
   decision: "approve" | "reject";
   note?: string;
+  /** Who the approved email goes to; required to approve. */
+  to_email?: string;
+  to_name?: string;
+}
+
+export type EmailDeliveryMode = "console" | "redirect" | "live";
+
+/** Where an approved application email stands. */
+export interface ApplicationDelivery {
+  status:
+    | "none" | "draft" | "awaiting_approval" | "approved"
+    | "sending" | "sent" | "failed" | "canceled";
+  intended_to: string | null;
+  delivered_to: string | null;
+  /** True when it went to the applicant's own inbox (demo delivery). */
+  redirected: boolean;
+  sent_at: string | null;
+  error: string | null;
 }
 
 /* ------------------------------------------------------------------ meta */
@@ -528,6 +548,17 @@ export interface AppMeta {
   demo_mode: boolean;
   ai_writing: boolean;
   web_research: boolean;
+  email_delivery: EmailDeliveryMode;
+}
+
+/* ------------------------------------------------------------------ catalog */
+
+/** Public counts about the shared catalogue the guidance draws on. */
+export interface CatalogStats {
+  career_paths: number;
+  roles: number;
+  skills: number;
+  learning_resources: number;
 }
 
 /* ------------------------------------------------------------------ career */

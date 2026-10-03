@@ -7,6 +7,7 @@ import {
   AiSessionList,
   AppMeta,
   Application,
+  ApplicationDelivery,
   ApplicationListResponse,
   ApplicationStatus,
   ApplicationTimeline,
@@ -17,6 +18,7 @@ import {
   CareerOverview,
   CareerPath,
   CareerPaths,
+  CatalogStats,
   CareerProfile,
   EvalResult,
   EvalRun,
@@ -85,6 +87,18 @@ export function makeApi(f: Fetcher) {
       },
       async changePassword(body: { current_password: string; new_password: string }) {
         return f<AccessResponse>("/api/v1/auth/password/change", json("POST", body));
+      },
+      async forgotPassword(email: string) {
+        return f<{ detail: string }>("/api/v1/auth/password/forgot", json("POST", { email }));
+      },
+      async resetPassword(body: { token: string; new_password: string }) {
+        return f<void>("/api/v1/auth/password/reset", json("POST", body));
+      },
+      async verifyEmail(token: string) {
+        return f<void>("/api/v1/auth/email/verify", json("POST", { token }));
+      },
+      async resendVerification() {
+        return f<{ detail: string }>("/api/v1/auth/email/verify/resend", json("POST"));
       },
     },
     profile: {
@@ -227,6 +241,12 @@ export function makeApi(f: Fetcher) {
           json("POST", { body }),
         );
       },
+      async delivery(id: string) {
+        return f<ApplicationDelivery>(`/api/v1/applications/${id}/delivery`);
+      },
+      async send(id: string) {
+        return f<ApplicationDelivery>(`/api/v1/applications/${id}/send`, { method: "POST" });
+      },
       async timeline(id: string) {
         return f<ApplicationTimeline>(`/api/v1/applications/${id}/timeline`);
       },
@@ -296,6 +316,17 @@ export function makeApi(f: Fetcher) {
     meta: {
       async get() {
         return f<AppMeta>("/api/v1/meta");
+      },
+    },
+    account: {
+      /** Irreversible: needs the current password and the word DELETE. */
+      async remove(body: { password: string; confirm: "DELETE" }) {
+        return f<void>("/api/v1/account", json("DELETE", body));
+      },
+    },
+    catalog: {
+      async stats() {
+        return f<CatalogStats>("/api/v1/catalog/stats");
       },
     },
     career: {

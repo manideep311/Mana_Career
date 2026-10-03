@@ -10,10 +10,12 @@ import { KanbanBoard } from "@/components/applications/KanbanBoard";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import type { Application, ApplicationListResponse, ApplicationStatus } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -101,6 +103,7 @@ function BoardInner() {
   if (items.length === 0) {
     return (
       <EmptyState
+        art={PAGE_ART.emptyApplications}
         title="No applications yet"
         description="Save a job to start tracking it, or prepare one with Mana AI."
         action={
@@ -126,10 +129,11 @@ export default function ApplicationsPage() {
   return (
     <RequireAuth>
       <div className="space-y-6">
-        <header>
-          <h1 className="text-xl font-semibold text-text">Applications</h1>
-          <p className="text-sm text-text-muted">Every role you&apos;re tracking, by stage.</p>
-        </header>
+        <PageBanner
+          art={PAGE_ART.applications}
+          title="Applications"
+          description="Every role you're tracking, by stage."
+        />
         <BoardInner />
       </div>
     </RequireAuth>

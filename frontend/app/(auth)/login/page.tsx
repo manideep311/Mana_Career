@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
+import { AuthHeading } from "@/components/auth/AuthHeading";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Sign in | Mana Career",
@@ -10,15 +10,14 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <>
-      <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <p className="text-sm text-text-muted">
-          Welcome back. Enter your details to continue.
-        </p>
-      </CardHeader>
-      <CardBody>
+      <AuthHeading
+        align="start"
+        title="Welcome back"
+        description="Sign in to continue shaping your career."
+      />
+      <div className="mt-8">
         <LoginForm />
-      </CardBody>
+      </div>
     </>
   );
 }

@@ -9,6 +9,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toaster";
 import type { ItemOut, Section } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -106,6 +107,8 @@ export function SubEntityList({ section }: { section: Section }) {
     <div className="flex flex-col gap-3">
       {items.length === 0 ? (
         <EmptyState
+          compact
+          art={PAGE_ART.emptyProfile}
           title={`No ${section} yet.`}
           description="Add one to strengthen your profile."
         />

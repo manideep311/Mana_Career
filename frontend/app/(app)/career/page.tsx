@@ -7,8 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 import { PathCard } from "@/components/career/PathCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { EmptyState } from "@/components/common/EmptyState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -22,14 +24,11 @@ export default function CareerPathsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="font-display text-3xl text-text">Where your experience could take you</h1>
-        <p className="text-sm text-text-muted">
-          These paths appear relevant based on the skills in your résumé and profile, compared
-          with the roles we know about. Open one to see why, what you already have, and
-          what&apos;s missing.
-        </p>
-      </header>
+      <PageBanner
+        art={PAGE_ART.careerPaths}
+        title="Where your experience could take you"
+        description="These paths appear relevant based on the skills in your résumé and profile, compared with the roles we know about. Open one to see why, what you already have, and what's missing."
+      />
 
       {paths.isPending ? (
         <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading paths">
@@ -40,6 +39,7 @@ export default function CareerPathsPage() {
         <ErrorState title="We couldn't load your paths." onRetry={() => void paths.refetch()} />
       ) : paths.data.paths.length === 0 ? (
         <EmptyState
+          art={PAGE_ART.emptyPaths}
           title="No paths to suggest yet"
           description="Upload your résumé or add the tools you use to your profile, and we'll map the roles they point to."
           action={

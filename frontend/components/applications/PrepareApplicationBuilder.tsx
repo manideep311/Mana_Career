@@ -4,9 +4,9 @@ import { useState } from "react";
 
 import Link from "next/link";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApprovalCard } from "@/components/applications/ApprovalCard";
+import { ApprovalCard, type Recipient } from "@/components/applications/ApprovalCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LaunchProgress } from "@/components/motion/LaunchProgress";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toaster";
 import { usePrepareRunEvents } from "@/hooks/usePrepareRunEvents";
+import { ProblemError } from "@/lib/api/fetcher";
+import type { ApplicationDelivery } from "@/lib/api/types";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -36,9 +38,38 @@ const NODE_STAGE: Record<string, number> = {
   application_prep: 4,
 };
 
+/** Poll delivery every 2 s for up to ~90 s, then stop and say so (bounded, R11). */
+export const DELIVERY_POLL_MS = 2000;
+export const DELIVERY_MAX_POLLS = 45;
+
+/** The server's RFC 9457 `detail`, when it sent one. */
+function problemDetail(err: unknown): string | null {
+  if (err instanceof ProblemError && err.problem && typeof err.problem === "object") {
+    const detail = (err.problem as { detail?: unknown }).detail;
+    if (typeof detail === "string") return detail;
+  }
+  return null;
+}
+
+function sentAt(d: ApplicationDelivery): string {
+  return d.sent_at ? ` at ${new Date(d.sent_at).toLocaleTimeString()}` : "";
+}
+
+/** Plain words for where the approved email ended up. */
+function sentMessage(d: ApplicationDelivery): string {
+  if (d.redirected) {
+    return `Delivered to your inbox (${d.delivered_to})${sentAt(d)} as a demo. In the live product it goes to ${d.intended_to}.`;
+  }
+  if (d.delivered_to) {
+    return `Application sent to ${d.delivered_to}${sentAt(d)}. A copy is in your inbox.`;
+  }
+  return `Application recorded as sent${sentAt(d)}. This server doesn't send real email.`;
+}
+
 export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [attempt, setAttempt] = useState(0);
   const [run, setRun] = useState<{ sessionId: string; runId: string } | null>(null);
   const [decided, setDecided] = useState<"approve" | "reject" | null>(null);
@@ -58,19 +89,39 @@ export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
   });
   const applicationId = approvalQuery.data?.application_id ?? null;
 
-  const decideMut = useMutation({
-    mutationFn: (decision: "approve" | "reject") =>
-      api.approvals.decide(ev.approvalId as string, { decision }),
-    onSuccess: (_v, decision) => setDecided(decision),
-    onError: () => toast({ title: "Couldn't record your decision.", variant: "danger" }),
+  // Where approved emails go on this server (console / demo redirect / live).
+  const metaQuery = useQuery({
+    queryKey: qk.meta,
+    queryFn: () => api.meta.get(),
+    staleTime: Infinity,
+    retry: false,
   });
 
-  const applicationQuery = useQuery({
-    queryKey: qk.application(applicationId ?? ""),
-    queryFn: () => api.applications.get(applicationId as string),
+  const decideMut = useMutation({
+    mutationFn: (v: { decision: "approve" | "reject"; recipient?: Recipient }) =>
+      api.approvals.decide(ev.approvalId as string, { decision: v.decision, ...v.recipient }),
+    onSuccess: (_v, v) => setDecided(v.decision),
+    onError: (err) =>
+      toast({ title: problemDetail(err) ?? "Couldn't record your decision.", variant: "danger" }),
+  });
+
+  const deliveryKey = qk.applicationDelivery(applicationId ?? "");
+  const deliveryQuery = useQuery({
+    queryKey: deliveryKey,
+    queryFn: () => api.applications.delivery(applicationId as string),
     enabled: decided === "approve" && applicationId != null,
-    refetchInterval: (q) =>
-      q.state.data && q.state.data.status !== "awaiting_approval" ? false : 2000,
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      if (s === "sent" || s === "failed") return false;
+      return q.state.dataUpdateCount >= DELIVERY_MAX_POLLS ? false : DELIVERY_POLL_MS;
+    },
+  });
+
+  const resendMut = useMutation({
+    mutationFn: () => api.applications.send(applicationId as string),
+    onSuccess: (d) => queryClient.setQueryData(deliveryKey, d),
+    onError: (err) =>
+      toast({ title: problemDetail(err) ?? "Couldn't send it again.", variant: "danger" }),
   });
 
   function startOver() {
@@ -78,6 +129,12 @@ export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
     setDecided(null);
     setAttempt((a) => a + 1);
   }
+
+  const backLink = (
+    <Link href={`/jobs/${jobId}`} className="text-sm font-medium text-accent underline-offset-4 hover:underline">
+      Back to the job
+    </Link>
+  );
 
   // --- not started ---
   if (!run) {
@@ -100,38 +157,71 @@ export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
       <Card>
         <CardBody className="flex flex-col items-start gap-3">
           <p className="text-sm text-text">You didn&apos;t approve this application — nothing was sent.</p>
-          <Link href={`/jobs/${jobId}`} className="text-sm font-medium text-accent underline-offset-4 hover:underline">
-            Back to the job
-          </Link>
+          {backLink}
         </CardBody>
       </Card>
     );
   }
 
+  const delivery = deliveryQuery.data;
+
   // --- terminal: sent ---
-  if (decided === "approve" && applicationQuery.data?.status === "applied") {
-    const at = applicationQuery.data.applied_at;
+  if (decided === "approve" && delivery?.status === "sent") {
     return (
       <Card>
         <CardBody className="flex flex-col items-start gap-3">
-          <p className="text-sm font-medium text-positive">
-            Application sent{at ? ` at ${new Date(at).toLocaleTimeString()}` : ""}.
+          <p role="status" className="text-sm font-medium text-positive">
+            {sentMessage(delivery)}
           </p>
-          <Link href={`/jobs/${jobId}`} className="text-sm font-medium text-accent underline-offset-4 hover:underline">
-            Back to the job
-          </Link>
+          {backLink}
         </CardBody>
       </Card>
     );
   }
 
-  // --- sending (approved, polling) ---
-  if (decided === "approve") {
+  // --- terminal: the send failed (never retried automatically) ---
+  if (decided === "approve" && delivery?.status === "failed") {
     return (
       <Card>
-        <CardBody className="flex items-center gap-2">
-          <Spinner size="sm" />
-          <p className="text-sm text-text-muted">Sending your application…</p>
+        <CardBody className="flex flex-col items-start gap-3">
+          <p role="alert" className="text-sm font-medium text-danger">
+            Your application wasn&apos;t sent.
+          </p>
+          {delivery.error ? <p className="text-sm text-text-muted">{delivery.error}</p> : null}
+          <div className="flex items-center gap-4">
+            <Button loading={resendMut.isPending} onClick={() => resendMut.mutate()}>
+              Try sending again
+            </Button>
+            {backLink}
+          </div>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  // --- sending (approved, polling within a time limit) ---
+  if (decided === "approve") {
+    const polls = queryClient.getQueryState(deliveryKey)?.dataUpdateCount ?? 0;
+    const stalled = deliveryQuery.isError || polls >= DELIVERY_MAX_POLLS;
+    return (
+      <Card>
+        <CardBody className="flex flex-col items-start gap-3">
+          {stalled ? (
+            <>
+              <p className="text-sm text-text">
+                This is taking longer than usual. Your approval is saved; check your
+                applications in a minute.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => void deliveryQuery.refetch()}>
+                Check again
+              </Button>
+            </>
+          ) : (
+            <p role="status" className="flex items-center gap-2 text-sm text-text-muted">
+              <Spinner size="sm" />
+              Sending your application…
+            </p>
+          )}
         </CardBody>
       </Card>
     );
@@ -153,8 +243,11 @@ export function PrepareApplicationBuilder({ jobId }: { jobId: string }) {
         <ApprovalCard
           snapshot={approvalQuery.data.payload_snapshot}
           submitting={decideMut.isPending}
-          onApprove={() => decideMut.mutate("approve")}
-          onReject={() => decideMut.mutate("reject")}
+          onApprove={(recipient) => decideMut.mutate({ decision: "approve", recipient })}
+          onReject={() => decideMut.mutate({ decision: "reject" })}
+          delivery={metaQuery.data?.email_delivery ?? null}
+          applicantEmail={user?.email ?? null}
+          emailConfirmed={user?.email_verified ?? true}
         />
       </div>
     );

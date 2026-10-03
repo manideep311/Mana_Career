@@ -3,13 +3,16 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { ErrorState } from "@/components/common/ErrorState";
+import { PageBanner } from "@/components/common/PageBanner";
 import { StrengthMeter } from "@/components/common/StrengthMeter";
+import { AccountDataSection } from "@/components/profile/AccountDataSection";
 import { ProfileScalarForm } from "@/components/profile/ProfileScalarForm";
 import { ProfileSkills } from "@/components/profile/ProfileSkills";
 import { SubEntityList } from "@/components/profile/SubEntityList";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Section } from "@/lib/api/types";
+import { PAGE_ART } from "@/lib/page-art";
 import { qk } from "@/lib/query";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -58,12 +61,11 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-text">Your profile</h1>
-        <p className="text-sm text-text-muted">
-          Keep this current — it powers your matches and your application prep.
-        </p>
-      </header>
+      <PageBanner
+        art={PAGE_ART.profile}
+        title="Your profile"
+        description="Keep this current — it powers your matches and your application prep."
+      />
 
       <Card>
         <CardBody>
@@ -107,6 +109,8 @@ export default function ProfilePage() {
           <SubEntityList section={section} />
         </section>
       ))}
+
+      <AccountDataSection />
     </div>
   );
 }

@@ -1,18 +1,20 @@
 /*
- * Design tokens. Calm, editorial, paper-toned: warm off-white page, ink text,
- * one deep accent used sparingly. Keep the token *names* stable; components
- * only ever reference these through the Tailwind theme in app/globals.css.
+ * Design tokens. Calm and bright: cool off-white page, near-black ink, one
+ * violet accent (with a lighter partner for the rare gradient highlight).
+ * Keep the token *names* stable; components only ever reference these
+ * through the Tailwind theme in app/globals.css.
  */
 :root {
-  --bg: #f8f6f1;
+  --bg: #f8f7fc;
   --surface: #ffffff;
-  --surface-sunk: #f1eee7;
-  --text: #1c2128;
-  --text-muted: #58606c;
-  --text-subtle: #58606c;
-  --accent: #2f4f9c;
+  --surface-sunk: #f1f0f8;
+  --text: #15131f;
+  --text-muted: #5c5a6e;
+  --text-subtle: #5c5a6e;
+  --accent: #5a4ae3;
+  --accent-2: #8b5cf6;
   --accent-fg: #ffffff;
-  --accent-soft: #e9eef8;
+  --accent-soft: #eeebfd;
   --positive: #1d7f4e;
   --positive-soft: #e5f2ea;
   --warning: #8f5c00;
@@ -20,11 +22,11 @@
   --danger: #b93a31;
   --danger-soft: #f9e8e6;
   --danger-fg: #ffffff;
-  --border: #e4e0d7;
-  --ring: rgba(47, 79, 156, 0.4);
+  --border: #e6e4f0;
+  --ring: rgba(90, 74, 227, 0.4);
   --radius: 14px;
-  --shadow-1: 0 1px 2px rgba(28, 33, 40, 0.05), 0 1px 3px rgba(28, 33, 40, 0.04);
-  --shadow-2: 0 6px 16px rgba(28, 33, 40, 0.07);
+  --shadow-1: 0 1px 2px rgba(21, 19, 31, 0.05), 0 1px 3px rgba(21, 19, 31, 0.04);
+  --shadow-2: 0 10px 30px rgba(52, 40, 140, 0.12);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 

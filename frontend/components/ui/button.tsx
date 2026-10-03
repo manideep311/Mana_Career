@@ -14,8 +14,16 @@ export const buttonVariants = cva(
         ghost: "text-text hover:bg-surface-sunk",
         danger: "bg-danger text-danger-fg hover:brightness-95",
         link: "text-accent underline-offset-4 hover:underline p-0 h-auto",
+        gradient:
+          "bg-gradient-to-r from-accent to-accent-2 text-accent-fg shadow-[0_10px_24px_rgba(90,74,227,0.28)] hover:brightness-110",
       },
-      size: { sm: "h-8 px-3", md: "h-10 px-4", lg: "h-11 px-5", icon: "h-10 w-10" },
+      size: {
+        sm: "h-8 px-3",
+        md: "h-10 px-4",
+        lg: "h-11 px-5",
+        xl: "h-12 rounded-xl px-6 text-base font-semibold",
+        icon: "h-10 w-10",
+      },
     },
     defaultVariants: { variant: "default", size: "md" },
   },

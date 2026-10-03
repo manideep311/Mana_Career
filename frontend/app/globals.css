@@ -20,7 +20,9 @@
   --color-danger-fg: var(--danger-fg);
   --color-surface-sunk: var(--surface-sunk);
   --color-text-subtle: var(--text-subtle);
-  --font-display: var(--font-display-serif), Georgia, "Times New Roman", serif;
+  --font-display: var(--font-display-sans), var(--font-inter), system-ui, sans-serif;
+  --font-hand: var(--font-hand-script), "Segoe Print", cursive;
+  --color-accent-2: var(--accent-2);
   --animate-rise: rise 360ms var(--ease-out) both;
 }
 
@@ -37,6 +39,15 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Display headings are bold and slightly tight; an explicit weight utility on
+   the same element still wins (utilities sit above base). */
+@layer base {
+  .font-display {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
 }
 
 body {
@@ -113,4 +124,16 @@ body {
   .paper-rocket .pr-crease { animation: none; opacity: 0; }
   .paper-rocket .pr-rocket,
   .paper-rocket .pr-trail { animation: none; opacity: 1; transform: none; }
+}
+
+/* Walkthrough step progress: fills once per step while playing. */
+.hiw-progress {
+  width: 0;
+  animation: hiw-progress linear forwards;
+}
+@keyframes hiw-progress {
+  to { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hiw-progress { animation: none; width: 100%; }
 }

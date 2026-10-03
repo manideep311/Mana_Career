@@ -36,6 +36,8 @@ export interface AuthContextValue {
     current_password: string;
     new_password: string;
   }) => Promise<void>;
+  /** Re-read the signed-in user (e.g. after confirming the email address). */
+  reloadUser: () => Promise<void>;
 }
 
 /** Name of the cross-tab Web Lock that serializes token refreshes. */
@@ -207,6 +209,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [api],
   );
 
+  const reloadUser = useCallback(async () => {
+    if (!tokenRef.current) return;
+    setUser(await api.auth.me());
+  }, [api]);
+
   useEffect(() => {
     let active = true;
     void bootstrap().catch(() => {
@@ -227,8 +234,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       changePassword,
+      reloadUser,
     }),
-    [status, user, api, authedStream, login, register, logout, changePassword],
+    [status, user, api, authedStream, login, register, logout, changePassword, reloadUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

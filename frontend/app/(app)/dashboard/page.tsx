@@ -10,6 +10,7 @@ import { SkillStepCard } from "@/components/career/SkillStepCard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { JourneyPath } from "@/components/dashboard/JourneyPath";
 import { NextActions } from "@/components/dashboard/NextActions";
+import { WelcomeBanner } from "@/components/dashboard/WelcomeBanner";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardBody } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -152,14 +153,10 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl text-text">
-          Good {partOfDay()}, {firstName}
-        </h1>
-        <p className="text-sm text-text-muted">
-          Where you are, where you could go, and the next useful step.
-        </p>
-      </header>
+      <WelcomeBanner
+        title={`Good ${partOfDay()}, ${firstName}`}
+        subtitle="Where you are, where you could go, and the next useful step."
+      />
 
       {overview.isPending ? (
         <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading your overview">
