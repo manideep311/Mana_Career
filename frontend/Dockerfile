@@ -1,4 +1,4 @@
-FROM node:22-slim AS base
+FROM node:26-slim AS base
 RUN corepack enable
 WORKDIR /app
 
@@ -24,7 +24,7 @@ ARG NEXT_PUBLIC_SITE_URL=""
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN pnpm build
 
-FROM node:22-slim AS runner
+FROM node:26-slim AS runner
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
 # Apply Debian security fixes published since the base image was built (the
 # image scan in CI fails on fixable HIGH/CRITICAL findings).
