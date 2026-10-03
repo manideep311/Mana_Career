@@ -38,7 +38,13 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 3s
           --health-timeout 3s --health-retries 20
+      # Real SMTP server for the email round-trip test (tests/integration).
+      mailpit:
+        image: axllent/mailpit:v1.31.3
+        ports: ["1025:1025", "8025:8025"]
     env:
+      MAILPIT_URL: http://localhost:8025
+      MAILPIT_SMTP_PORT: "1025"
       DATABASE_URL: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       DATABASE_URL_TEST: postgresql+asyncpg://mana:mana@localhost:5432/mana_test
       REDIS_URL: redis://localhost:6379/0
@@ -117,7 +123,7 @@ jobs:
 
   images:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -201,6 +207,41 @@ jobs:
 
       - name: Smoke
         run: SMOKE_UPLOAD_PERSISTENCE=1 ./scripts/smoke-prod.sh
+
+      # ---- End-to-end: a real browser through the production stack ----
+      - name: Load the demo catalogue (jobs, skills, learning resources)
+        run: docker compose -f compose.prod.yml run --rm migrate python -m app.seed all
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 11
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install end-to-end tooling
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: https://localhost
+        run: pnpm e2e
+
+      - name: Keep the end-to-end report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
 
       - name: Backup round-trip
         run: |

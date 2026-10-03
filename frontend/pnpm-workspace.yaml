@@ -13,3 +13,19 @@ overrides:
   # GHSA-6g55-p6wh-862q + GHSA-r28c-9q8g-f849 - postcss sourceMappingURL
   # path traversal / file read; patched >=8.5.18. Next.js bundles 8.4.31.
   postcss: "^8.5.18"
+  # brace-expansion DoS (uncontrolled recursion / quadratic expansion); patched
+  # 1.1.21 and 5.0.12. Reached only through ESLint's minimatch (dev tooling).
+  # Same-major bumps, so minimatch's API is unchanged.
+  "brace-expansion@1": "^1.1.21"
+  "brace-expansion@5": "^5.0.12"
+
+# Advisories with no patched release yet, accepted after review. Re-check each
+# one whenever dependencies are updated and remove it as soon as a fix ships.
+audit:
+  ignore:
+    # GHSA-vfj7-8cjw-p6xm (2026-10) - braces <=3.0.3 stack exhaustion on deeply
+    # nested patterns; no patched version. Reached only through ESLint
+    # (eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch),
+    # which expands the glob patterns in our own lint config: no untrusted
+    # input, and nothing here ships to users.
+    - GHSA-vfj7-8cjw-p6xm

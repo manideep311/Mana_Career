@@ -7,3 +7,8 @@ tests/
 test/
 *.tsbuildinfo
 .turbo/
+# End-to-end tests run against a live stack; they never ship in the image.
+e2e/
+playwright.config.ts
+playwright-report/
+test-results/

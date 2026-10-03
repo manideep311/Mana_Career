@@ -41,3 +41,11 @@ deploy/nginx/certs/*
 
 # Local production backups (scripts/backup.sh)
 /backups/
+
+# Playwright end-to-end output
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/blob-report/
+
+# Original artwork (large PNGs); the web-sized copies live in frontend/public/art
+/Page Images/
