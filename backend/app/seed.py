@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -333,6 +333,33 @@ async def seed_learning_resources(session: AsyncSession | None = None) -> int:
     return len(entries)
 
 
+async def catalogue_is_empty(session: AsyncSession | None = None) -> bool:
+    """True when no reference roles have been loaded yet."""
+
+    async def _count(s: AsyncSession) -> int:
+        return int(
+            (
+                await s.execute(select(func.count()).select_from(Job).where(Job.is_seed.is_(True)))
+            ).scalar_one()
+        )
+
+    if session is not None:
+        return await _count(session) == 0
+    async with AsyncSessionLocal() as s:
+        return await _count(s) == 0
+
+
+async def seed_all_if_empty() -> bool:
+    """Load the whole catalogue only if it isn't there yet (used at start-up on
+    hosts without a shell, so a wake-up doesn't redo the work). True if seeded."""
+    if not await catalogue_is_empty():
+        return False
+    await seed_skills()
+    await seed_jobs()
+    await seed_learning_resources()
+    return True
+
+
 if __name__ == "__main__":
     target = sys.argv[1:2]
     if target == ["skills"]:
@@ -351,5 +378,8 @@ if __name__ == "__main__":
 
         skills_n, jobs_n, learning_n = asyncio.run(_seed_all())
         print(f"seeded {skills_n} skills, {jobs_n} jobs, {learning_n} learning resources")
+    elif target == ["if-empty"]:
+        seeded = asyncio.run(seed_all_if_empty())
+        print("seeded the catalogue" if seeded else "catalogue already loaded")
     else:
-        sys.exit("usage: python -m app.seed {skills|jobs|learning|all}")
+        sys.exit("usage: python -m app.seed {skills|jobs|learning|all|if-empty}")

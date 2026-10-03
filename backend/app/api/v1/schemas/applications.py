@@ -58,3 +58,18 @@ class TimelineItemOut(BaseModel):
 
 class ApplicationTimelineOut(BaseModel):
     items: list[TimelineItemOut]
+
+
+class ApplicationDeliveryOut(BaseModel):
+    """Where the approved email stands. ``redirected`` means it reached the
+    applicant's own inbox (demo delivery) rather than ``intended_to``."""
+
+    status: Literal[
+        "none", "draft", "awaiting_approval", "approved", "sending", "sent", "failed", "canceled"
+    ]
+    intended_to: str | None
+    delivered_to: str | None
+    redirected: bool
+    sent_at: dt.datetime | None
+    error: str | None
+

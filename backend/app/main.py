@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, Request, Response
@@ -31,6 +34,33 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def _start_worker() -> Any:
+    """The background worker, started inside this process (RUN_WORKER_IN_API).
+
+    Imported lazily so an API-only process never loads the worker. Signals stay
+    with Uvicorn; the lifespan below closes the worker on shutdown."""
+    from arq.worker import create_worker
+
+    from app.worker.main import WorkerSettings
+
+    # WorkerSettings is a plain settings class (what the `arq` CLI accepts too).
+    return create_worker(cast(Any, WorkerSettings), handle_signals=False)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    worker = _start_worker() if get_settings().run_worker_in_api else None
+    task = asyncio.create_task(worker.async_run()) if worker is not None else None
+    try:
+        yield
+    finally:
+        if worker is not None and task is not None:
+            await worker.close()  # stops polling, lets running jobs finish
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings)
@@ -43,6 +73,7 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json" if docs_enabled else None,
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
+        lifespan=_lifespan,
     )
     # add_middleware prepends, so the last added runs outermost:
     # RequestID -> CORS -> RateLimit -> BodySizeLimit -> router.
@@ -61,6 +92,9 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Readable by the web app across origins: the export's file name, how
+        # long to wait after a rate limit, and the id support asks for.
+        expose_headers=["Content-Disposition", "Retry-After", "X-Request-ID"],
     )
     app.add_middleware(RequestIDMiddleware)
     install_error_handlers(app)

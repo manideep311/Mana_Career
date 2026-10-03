@@ -83,7 +83,27 @@ def test_bucket_classifies_uploads():
     assert _bucket("/api/v1/jobs", "POST") == "upload"
     assert _bucket("/api/v1/resumes", "GET") == "read"
     assert _bucket("/api/v1/auth/login", "POST") == "auth"
-    assert _bucket("/api/v1/auth/refresh", "POST") == "auth"
+
+
+def test_only_guessable_auth_endpoints_share_the_strict_auth_limit():
+    # Anything that checks a password, an email or an emailed link can be
+    # brute-forced, so it stays on the tight per-IP auth limit.
+    for path in (
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/password/change",
+        "/api/v1/auth/password/forgot",
+        "/api/v1/auth/password/reset",
+        "/api/v1/auth/email/verify",
+        "/api/v1/auth/email/verify/resend",
+    ):
+        assert _bucket(path, "POST") == "auth", path
+    # Every page load refreshes the session and reads /me. Those use a random
+    # 256-bit cookie or a signed token (nothing to guess), so they must not spend
+    # the auth allowance, or opening a few pages quickly would sign people out.
+    assert _bucket("/api/v1/auth/refresh", "POST") == "read"
+    assert _bucket("/api/v1/auth/logout", "POST") == "read"
+    assert _bucket("/api/v1/auth/me", "GET") == "read"
 
 
 def test_bucket_classifies_llm_tier():
@@ -96,6 +116,7 @@ def test_bucket_classifies_llm_tier():
         "/api/v1/matches/recompute",
         "/api/v1/roadmaps",
         "/api/v1/applications",
+        f"/api/v1/applications/{uid}/send",
         f"/api/v1/ai/sessions/{uid}/messages",
         f"/api/v1/ai/sessions/{uid}/goal",
     ):
@@ -146,3 +167,9 @@ def test_cf_header_used_from_the_tunnel_peer():
 def test_malformed_cf_header_falls_back_to_the_peer():
     s = _settings(["172.30.0.0/24"])
     assert client_ip(_request("172.30.0.1", "not-an-ip"), s) == "172.30.0.1"
+
+
+def test_account_endpoints_are_throttled_by_weight():
+    assert _bucket("/api/v1/account", "DELETE") == "auth"  # checks a password
+    assert _bucket("/api/v1/account/export", "GET") == "upload"  # zips everything
+

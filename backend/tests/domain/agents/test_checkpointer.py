@@ -19,6 +19,19 @@ def test_dsn_strips_the_asyncpg_driver_token():
     assert _psycopg_dsn(_settings()) == "postgresql://u:p@h/db"
 
 
+def test_dsn_speaks_libpq_for_hosted_postgres():
+    # asyncpg's ssl= becomes libpq's sslmode=; an encoded password survives.
+    s = _settings().model_copy(
+        update={
+            "database_url": "postgresql+asyncpg://postgres.ref:p%40ss@pooler.example.com:5432/"
+            "postgres?ssl=require"
+        }
+    )
+    assert _psycopg_dsn(s) == (
+        "postgresql://postgres.ref:p%40ss@pooler.example.com:5432/postgres?sslmode=require"
+    )
+
+
 async def test_test_env_returns_memory_saver_and_is_singleton():
     _reset_for_tests()
     from langgraph.checkpoint.memory import MemorySaver

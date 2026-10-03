@@ -76,6 +76,7 @@ async def _drive(
         publish=publish,
         svc=svc,
         email_sender=get_email_sender(settings),
+        settings=settings,
         user_id=s.user_id,
         run_id=run_id,
         session_id=s.id,

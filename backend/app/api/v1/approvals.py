@@ -7,7 +7,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import CurrentUser, DbDep, SettingsDep
 from app.api.v1.schemas.approvals import (
     ApprovalDecisionIn,
     ApprovalRequestListOut,
@@ -15,6 +15,11 @@ from app.api.v1.schemas.approvals import (
 )
 from app.core.errors import ConflictError, NotFoundError
 from app.domain.agents.service import AgentService
+from app.domain.applications.sending import (
+    UNVERIFIED,
+    email_confirmation_required,
+    set_approval_recipient,
+)
 from app.models.application import ApprovalRequest
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
@@ -69,11 +74,20 @@ async def get_approval(
 
 @router.post("/{approval_id}", status_code=status.HTTP_202_ACCEPTED)
 async def decide_approval(
-    approval_id: uuid.UUID, body: ApprovalDecisionIn, db: DbDep, user: CurrentUser
+    approval_id: uuid.UUID, body: ApprovalDecisionIn, db: DbDep, user: CurrentUser,
+    settings: SettingsDep,
 ) -> None:
     approval = await _get_owned(db, user.id, approval_id)
     if approval.status != "pending":
         raise ConflictError("This approval has already been decided.")
+    if body.decision == "approve" and email_confirmation_required(user, settings):
+        raise ConflictError(UNVERIFIED, code="email_unverified")
+    if body.decision == "approve":
+        # Refuses if the content changed since review; otherwise records the
+        # recipient and re-hashes so the approval covers it.
+        await set_approval_recipient(
+            db, user_id=user.id, approval=approval, to_email=body.to_email, to_name=body.to_name
+        )
 
     approval.status = "approved" if body.decision == "approve" else "rejected"
     approval.decided_by = user.id

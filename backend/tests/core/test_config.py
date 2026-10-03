@@ -88,7 +88,12 @@ _PROD_OK = {
 
 
 def _apply(monkeypatch: pytest.MonkeyPatch, **over: str) -> None:
-    for key in ("SEARCH_PROVIDER", "DEMO_MODE", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY"):
+    for key in (
+        "SEARCH_PROVIDER", "DEMO_MODE", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY",
+        "EMAIL_PROVIDER", "SMTP_HOST", "SMTP_SECURITY", "EMAIL_FROM_ADDRESS", "EMAIL_DELIVERY",
+        "APP_BASE_URL", "FILE_STORE", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+        "PROXY_SHARED_SECRET",
+    ):
         monkeypatch.delenv(key, raising=False)
     for key, value in _env(**over).items():
         monkeypatch.setenv(key, value)
@@ -164,7 +169,8 @@ def test_prod_does_not_require_web_search(monkeypatch: pytest.MonkeyPatch):
         ("EMBEDDINGS_PROVIDER", "local"),
         ("SEARCH_PROVIDER", "brave"),
         ("FILE_STORE", "s3"),
-        ("EMAIL_PROVIDER", "smtp"),
+        ("EMAIL_PROVIDER", "sendgrid"),
+        ("EMAIL_DELIVERY", "everyone"),
     ],
 )
 def test_unimplemented_providers_fail_at_startup(
@@ -197,3 +203,94 @@ def test_trusted_proxy_cidrs_parsed_and_validated(monkeypatch: pytest.MonkeyPatc
     _apply(monkeypatch, TRUSTED_PROXY_CIDRS="not-a-network")
     with pytest.raises(ValidationError, match="TRUSTED_PROXY_CIDRS"):
         Settings()
+
+
+_SMTP = {
+    "EMAIL_PROVIDER": "smtp",
+    "SMTP_HOST": "smtp.example.com",
+    "EMAIL_FROM_ADDRESS": "applications@example.com",
+}
+
+
+def test_smtp_needs_a_host_and_a_from_address(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_SMTP, "SMTP_HOST": " "})
+    with pytest.raises(ValidationError, match="SMTP_HOST"):
+        Settings()
+    _apply(monkeypatch, **{**_SMTP, "EMAIL_FROM_ADDRESS": "not-an-address"})
+    with pytest.raises(ValidationError, match="EMAIL_FROM_ADDRESS"):
+        Settings()
+
+
+def test_smtp_defaults_are_safe(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **_SMTP)
+    s = Settings()
+    assert s.email_provider == "smtp"
+    assert s.smtp_port == 587 and s.smtp_security == "starttls"
+    assert s.email_delivery == "redirect"  # real employers only on an explicit opt-in
+    assert s.email_daily_limit_per_user == 5 and s.email_daily_limit_total == 100
+
+
+def test_prod_refuses_unencrypted_smtp(monkeypatch: pytest.MonkeyPatch):
+    https = {"APP_BASE_URL": "https://career.example"}
+    _apply(monkeypatch, **{**_PROD_OK, **_SMTP, **https, "SMTP_SECURITY": "none"})
+    with pytest.raises(ValidationError, match="SMTP_SECURITY"):
+        Settings()
+    _apply(monkeypatch, **{**_PROD_OK, **_SMTP, **https, "SMTP_SECURITY": "starttls"})
+    assert Settings().email_provider == "smtp"
+
+
+
+def test_app_base_url_is_normalised_and_validated(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, APP_BASE_URL="https://career.example/")
+    assert Settings().app_base_url == "https://career.example"
+    _apply(monkeypatch, APP_BASE_URL="career.example")
+    with pytest.raises(ValidationError, match="APP_BASE_URL"):
+        Settings()
+
+
+def test_prod_email_links_must_be_https(monkeypatch: pytest.MonkeyPatch):
+    # Only when real email goes out: links in logged (console) mail don't matter.
+    _apply(monkeypatch, **{**_PROD_OK, "APP_BASE_URL": "http://career.example"})
+    assert Settings().app_base_url == "http://career.example"
+    _apply(monkeypatch, **{**_PROD_OK, **_SMTP, "APP_BASE_URL": "http://career.example"})
+    with pytest.raises(ValidationError, match="APP_BASE_URL"):
+        Settings()
+    _apply(monkeypatch, **{**_PROD_OK, **_SMTP, "APP_BASE_URL": "https://career.example"})
+    assert Settings().app_base_url == "https://career.example"
+
+
+def test_supabase_storage_needs_the_project_url_and_service_key(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, FILE_STORE="supabase")
+    with pytest.raises(ValidationError, match="SUPABASE_URL"):
+        Settings()
+    _apply(monkeypatch, FILE_STORE="supabase", SUPABASE_URL="https://proj.supabase.co")
+    with pytest.raises(ValidationError, match="SUPABASE_SERVICE_ROLE_KEY"):
+        Settings()
+    _apply(
+        monkeypatch, FILE_STORE="supabase", SUPABASE_URL="https://proj.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY="service-key",
+    )
+    s = Settings()
+    assert s.supabase_storage_bucket == "resumes"
+    assert "service-key" not in repr(s)
+
+
+def test_prod_proxy_secret_must_be_long(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "PROXY_SHARED_SECRET": "short"})
+    with pytest.raises(ValidationError, match="PROXY_SHARED_SECRET") as exc:
+        Settings()
+    assert "short" not in str(exc.value)
+    _apply(monkeypatch, **{**_PROD_OK, "PROXY_SHARED_SECRET": "x" * 40})
+    assert Settings().proxy_shared_secret is not None
+
+
+def test_small_hosts_can_shrink_the_pool_and_run_the_worker_in_the_api(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _apply(
+        monkeypatch, DATABASE_POOL_SIZE="3", DATABASE_MAX_OVERFLOW="2",
+        RUN_WORKER_IN_API="true", WORKER_MAX_JOBS="3",
+    )
+    s = Settings()
+    assert (s.database_pool_size, s.database_max_overflow) == (3, 2)
+    assert s.run_worker_in_api and s.worker_max_jobs == 3

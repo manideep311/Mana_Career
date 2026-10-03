@@ -40,16 +40,18 @@ def test_user_out_from_attributes():
         email = "a@b.com"
         full_name = "A"
         is_admin = False
+        email_verified = False
         created_at = dt.datetime.now(dt.UTC)
 
     out = UserOut.model_validate(_U())
     assert out.email == "a@b.com" and out.is_admin is False
+    assert out.email_verified is False
 
 
 def test_auth_response_defaults_token_type_bearer():
     r = AuthResponse(
         access_token="t", expires_in=900,
         user=UserOut(id=uuid.uuid4(), email="a@b.com", full_name="A",
-                     is_admin=False, created_at=dt.datetime.now(dt.UTC)),
+                     is_admin=False, email_verified=True, created_at=dt.datetime.now(dt.UTC)),
     )
     assert r.token_type == "bearer"

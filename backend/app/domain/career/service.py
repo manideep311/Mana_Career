@@ -14,6 +14,7 @@ from typing import Literal
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.career.families import family_for
 from app.domain.career.paths import (
     Candidate,
     CandidateSkill,
@@ -46,6 +47,21 @@ _DIMENSION_REASON = {
     "location": "Location fits",
     "salary": "Salary in your range",
 }
+
+
+@dataclass(frozen=True)
+class CatalogStats:
+    """Public counts describing the shared catalogue (never any user's data)."""
+
+    career_paths: int
+    roles: int
+    skills: int
+    learning_resources: int
+
+
+def family_count(titles: Iterable[str | None]) -> int:
+    """How many distinct role families these job titles fall into."""
+    return len({family_for(t).slug for t in titles if t and t.strip()})
 
 
 @dataclass(frozen=True)
@@ -215,6 +231,27 @@ class CareerService:
             )
             for j in rows
         ]
+
+    async def catalog_stats(self) -> CatalogStats:
+        titles = (
+            await self._s.execute(
+                select(Job.title).where(
+                    Job.user_id.is_(None), Job.status == "ready", Job.deleted_at.is_(None)
+                )
+            )
+        ).scalars().all()
+        skills = (await self._s.execute(select(func.count()).select_from(Skill))).scalar_one()
+        resources = (
+            await self._s.execute(
+                select(func.count()).select_from(LearningResource).where(
+                    LearningResource.is_active.is_(True)
+                )
+            )
+        ).scalar_one()
+        return CatalogStats(
+            career_paths=family_count(titles), roles=len(titles),
+            skills=int(skills), learning_resources=int(resources),
+        )
 
     # ------------------------------------------------------------------ guidance
 

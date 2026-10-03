@@ -30,8 +30,10 @@ __all__ = [
 ]
 
 
-def make_engine(url: str) -> AsyncEngine:
-    return create_async_engine(url, pool_pre_ping=True, future=True)
+def make_engine(url: str, *, pool_size: int = 5, max_overflow: int = 10) -> AsyncEngine:
+    return create_async_engine(
+        url, pool_pre_ping=True, future=True, pool_size=pool_size, max_overflow=max_overflow
+    )
 
 
 def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
@@ -39,7 +41,11 @@ def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession
 
 
 _settings = get_settings()
-engine: AsyncEngine = make_engine(_settings.database_url)
+engine: AsyncEngine = make_engine(
+    _settings.database_url,
+    pool_size=_settings.database_pool_size,
+    max_overflow=_settings.database_max_overflow,
+)
 AsyncSessionLocal: async_sessionmaker[AsyncSession] = make_session_factory(engine)
 
 

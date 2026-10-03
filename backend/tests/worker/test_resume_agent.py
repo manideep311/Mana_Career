@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 
 from app.domain.agents.service import AgentService
+from app.domain.applications.sending import set_approval_recipient
 from app.models.ai import AiSession
 from app.models.application import Application, ApplicationEmail, ApprovalRequest
 from app.models.job import Job
@@ -89,7 +90,12 @@ async def test_run_agent_pauses_then_resume_agent_sends(db_session, monkeypatch,
     ).scalar_one()
     assert approval.status == "pending"
 
-    # --- decide + resume: mirrors what POST /approvals/{id} does ---
+    # --- decide + resume: mirrors what POST /approvals/{id} does (the reviewer
+    # names the recipient, which the approval hash then covers) ---
+    await set_approval_recipient(
+        db_session, user_id=u.id, approval=approval,
+        to_email="hiring@acme.test", to_name="Hiring Team",
+    )
     approval.status = "approved"
     approval.decided_by = u.id
     approval.decided_at = datetime.now(UTC)
@@ -111,6 +117,9 @@ async def test_run_agent_pauses_then_resume_agent_sends(db_session, monkeypatch,
     assert email.provider == "console"
     assert email.provider_message_id and email.provider_message_id.startswith("console-")
     assert email.sent_at is not None
+    assert email.to_email == "hiring@acme.test"
+    # The console sender reaches no inbox, so nothing claims it was delivered.
+    assert email.delivered_to is None
 
 
 async def test_run_agent_pauses_then_resume_agent_rejects(db_session, monkeypatch, fake_redis):

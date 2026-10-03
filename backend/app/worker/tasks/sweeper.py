@@ -23,7 +23,9 @@ from app.core.db import AsyncSessionLocal
 from app.core.events import job_channel, publish_status, resume_channel, roadmap_channel
 from app.core.logging import get_logger
 from app.core.redis import redis_from_settings
+from app.domain.applications.sending import INTERRUPTED
 from app.models.ai import AiSession
+from app.models.application import ApplicationEmail
 from app.models.job import Job
 from app.models.learning import LearningRecommendation
 from app.models.match import JobMatch
@@ -54,7 +56,10 @@ async def sweep_stuck_jobs(
     now = now or dt.datetime.now(dt.UTC)
     cutoff = now - STALE_AFTER
     events: list[tuple[str, dict[str, Any]]] = []
-    counts = {"resumes": 0, "jobs": 0, "matches": 0, "agent_runs": 0, "roadmaps": 0}
+    counts = {
+        "resumes": 0, "jobs": 0, "matches": 0, "agent_runs": 0, "roadmaps": 0,
+        "application_emails": 0,
+    }
 
     async with _session_for() as session:
         # SKIP LOCKED: never wait on (or fight) a worker that is mid-update.
@@ -132,6 +137,21 @@ async def sweep_stuck_jobs(
                 )
             )
         counts["roadmaps"] = len(roadmaps)
+
+        # An email left "sending" by a dead worker may or may not have gone
+        # out; never resend it automatically -- fail it with a note to check
+        # the inbox, so the person can decide (and "Try sending again" works).
+        emails = (
+            await session.execute(
+                select(ApplicationEmail)
+                .where(ApplicationEmail.status == "sending", ApplicationEmail.updated_at < cutoff)
+                .with_for_update(skip_locked=True)
+            )
+        ).scalars().all()
+        for e in emails:
+            e.status = "failed"
+            e.send_error = INTERRUPTED
+        counts["application_emails"] = len(emails)
 
         await session.commit()
 

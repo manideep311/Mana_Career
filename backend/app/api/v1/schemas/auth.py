@@ -59,7 +59,30 @@ class UserOut(BaseModel):
     email: str
     full_name: str
     is_admin: bool
+    email_verified: bool
     created_at: dt.datetime
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: str) -> str:
+        return _clean_email(v)
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=200)
+
+
+class VerifyEmailIn(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+class MessageOut(BaseModel):
+    detail: str
 
 
 class AuthResponse(BaseModel):

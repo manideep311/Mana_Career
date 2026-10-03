@@ -22,6 +22,8 @@ class ConsoleEmailSender:
             to_email=message.to_email,
             subject=message.subject,
             body_len=len(message.body),
+            bcc=len(message.bcc),
+            attachments=[a.filename for a in message.attachments],
         )
         return EmailSendResult(
             provider="console", provider_message_id=f"console-{uuid.uuid4().hex}"

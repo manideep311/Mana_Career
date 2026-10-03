@@ -62,7 +62,18 @@ _LLM_POST_SUFFIXES = ("/reprocess", "/confirm-profile", "/tailor", "/messages", 
 def _bucket(path: str, method: str) -> str:
     base = get_settings().api_base_path
     if path.startswith(f"{base}/auth"):
+        # Refresh, logout and /me run on every page load and carry an unguessable
+        # cookie or signed token; only credential and link checks are throttled
+        # tightly (else a few quick page loads would read as a sign-out).
+        if path in (f"{base}/auth/refresh", f"{base}/auth/logout", f"{base}/auth/me"):
+            return "read"
         return "auth"
+    # Deleting the account checks the password: same tight limit as sign-in.
+    if path == f"{base}/account":
+        return "auth"
+    # The export zips every row and file the person has: a heavy request.
+    if path == f"{base}/account/export":
+        return "upload"
     if method != "POST":
         return "read"
     if path in (f"{base}/resumes", f"{base}/jobs"):
@@ -77,6 +88,9 @@ def _bucket(path: str, method: str) -> str:
     if path.startswith(f"{base}/ai/") and path.endswith(_LLM_POST_SUFFIXES):
         return "llm"
     if path.startswith(f"{base}/resumes/") and path.endswith(_LLM_POST_SUFFIXES):
+        return "llm"
+    # Retrying an application email talks to a mail server: keep it on the scarce tier.
+    if path.startswith(f"{base}/applications/") and path.endswith("/send"):
         return "llm"
     return "read"
 

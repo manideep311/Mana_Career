@@ -18,7 +18,7 @@ from app.domain.auth.tokens import (
     hash_refresh_token,
     new_refresh_token,
 )
-from app.models.auth import RefreshToken
+from app.models.auth import AuthToken, RefreshToken
 from app.models.user import User
 
 
@@ -246,17 +246,56 @@ class AuthService:
         ip: str | None, user_agent: str | None,
     ) -> AuthResult:
         if not verify_password(user.password_hash, current):
-            raise AuthError(
-                detail="That email or password is not right.", code="invalid_credentials"
+            # 403, not 401: the person is signed in; a 401 would read as an
+            # expired session and sign them out for a typo.
+            raise ForbiddenError(
+                detail="Your current password isn't right.", code="invalid_password"
             )
         user.password_hash = hash_password(new)
-        await self.session.execute(
-            update(RefreshToken)
-            .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=_now())
-        )
+        await self._end_all_sessions(user)
         access, expires_in, raw, _ = await self._issue(user, ip=ip, user_agent=user_agent)
         await self._audit(
             "auth.password_change", user_id=user.id, ip=ip, user_agent=user_agent
         )
         return AuthResult(user, access, expires_in, raw)
+
+    async def _end_all_sessions(self, user: User) -> None:
+        """Revoke every refresh token and any outstanding reset link."""
+        now = _now()
+        await self.session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=now)
+        )
+        await self.session.execute(
+            update(AuthToken)
+            .where(
+                AuthToken.user_id == user.id,
+                AuthToken.purpose == "password_reset",
+                AuthToken.used_at.is_(None),
+            )
+            .values(used_at=now)
+        )
+
+    async def reset_password(
+        self, user: User, new: str, *, ip: str | None, user_agent: str | None,
+    ) -> None:
+        """Set a new password from an emailed link: every session ends, and the
+        address counts as confirmed (the link proved the inbox is theirs)."""
+        user.password_hash = hash_password(new)
+        if user.email_verified_at is None:
+            user.email_verified_at = _now()
+        await self._end_all_sessions(user)
+        await self._audit("auth.password_reset", user_id=user.id, ip=ip, user_agent=user_agent)
+
+    async def mark_email_verified(
+        self, user: User, *, ip: str | None, user_agent: str | None,
+    ) -> None:
+        if user.email_verified_at is None:
+            user.email_verified_at = _now()
+        await self._audit("auth.email_verified", user_id=user.id, ip=ip, user_agent=user_agent)
+
+    async def find_active_by_email(self, email: str) -> User | None:
+        user = await self._by_email(email)
+        return user if user is not None and user.status == "active" else None
+

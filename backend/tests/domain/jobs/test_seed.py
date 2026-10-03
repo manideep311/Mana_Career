@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 
 from app.models.job import Job, JobChunk
-from app.seed import load_jobs_demo, seed_jobs
+from app.seed import catalogue_is_empty, load_jobs_demo, seed_jobs
 
 
 async def test_demo_file_is_well_formed():
@@ -52,3 +52,16 @@ async def test_seed_jobs_populates_ready_rows_with_embedded_chunks(db_session):
         select(func.count()).select_from(Job).where(Job.is_seed.is_(True))
     )).scalar_one()
     assert n2 == n and total == n
+
+
+async def test_catalogue_is_empty_until_reference_roles_exist(db_session):
+    # Start-up seeding (SEED_ON_START) relies on this to run only once.
+    if not await catalogue_is_empty(db_session):
+        return  # a shared test database may already hold the catalogue
+    db_session.add(
+        Job(user_id=None, raw_text="x" * 60, title="Seeded role", company="Acme",
+            status="ready", is_seed=True, source="seed", source_ref="test-only-seed-role",
+            required_skills=[], preferred_skills=[])
+    )
+    await db_session.flush()
+    assert not await catalogue_is_empty(db_session)

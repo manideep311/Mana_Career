@@ -35,7 +35,23 @@ async def test_meta_reports_demo_capabilities(settings_env: pytest.MonkeyPatch) 
     settings_env.setenv("DEMO_MODE", "true")
     status, body = await _get("/api/v1/meta")
     assert status == 200
-    assert body == {"demo_mode": True, "ai_writing": False, "web_research": False}
+    assert body == {
+        "demo_mode": True, "ai_writing": False, "web_research": False,
+        "email_delivery": "console",
+    }
+
+
+async def test_meta_reports_where_application_emails_go(settings_env: pytest.MonkeyPatch) -> None:
+    settings_env.setenv("EMAIL_PROVIDER", "smtp")
+    settings_env.setenv("SMTP_HOST", "smtp.example.com")
+    settings_env.setenv("EMAIL_FROM_ADDRESS", "applications@example.com")
+    settings_env.setenv("EMAIL_DELIVERY", "redirect")
+    _status, body = await _get("/api/v1/meta")
+    assert body["email_delivery"] == "redirect"
+    settings_env.setenv("EMAIL_DELIVERY", "live")
+    get_settings.cache_clear()
+    _status, body = await _get("/api/v1/meta")
+    assert body["email_delivery"] == "live"
 
 
 async def test_api_schema_is_served_outside_production(settings_env: pytest.MonkeyPatch) -> None:

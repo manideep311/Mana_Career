@@ -24,6 +24,13 @@ services:
       timeout: 3s
       retries: 20
 
+  # Catches every email the app sends in development. Point the app at it with
+  # EMAIL_PROVIDER=smtp SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none and
+  # read the mail at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports: ["1025:1025", "8025:8025"]
+
   api:
     build: { context: ./backend, target: dev }
     command: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"

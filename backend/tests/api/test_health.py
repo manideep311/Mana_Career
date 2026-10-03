@@ -26,3 +26,11 @@ async def test_unknown_route_is_problem_json(client):
     assert r.status_code == 404
     assert r.headers["content-type"] == "application/problem+json"
     assert r.json()["code"] == "not_found"
+
+
+async def test_the_web_app_can_read_the_headers_it_needs(client):
+    # Cross-origin, a browser hides response headers unless they're exposed:
+    # the export's file name, how long to wait after a rate limit, the request id.
+    r = await client.get("/health", headers={"Origin": "http://localhost:3000"})
+    exposed = {h.strip().lower() for h in r.headers["access-control-expose-headers"].split(",")}
+    assert {"content-disposition", "retry-after", "x-request-id"} <= exposed

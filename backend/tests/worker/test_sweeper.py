@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.domain.auth.service import AuthService
 from app.models.ai import AiSession
+from app.models.application import ApplicationEmail
 from app.models.job import Job
 from app.models.learning import LearningRecommendation
 from app.models.match import JobMatch
@@ -60,12 +61,18 @@ async def _seed(db_session):
     roadmap = LearningRecommendation(
         user_id=uid, scope="aggregate", title="Plan", status="planning"
     )
-    db_session.add_all([match, running, waiting, roadmap])
+    sending = ApplicationEmail(
+        user_id=uid, job_id=job.id, subject="Application", body="Hello", status="sending"
+    )
+    sent = ApplicationEmail(
+        user_id=uid, job_id=job.id, subject="Application", body="Hello", status="sent"
+    )
+    db_session.add_all([match, running, waiting, roadmap, sending, sent])
     await db_session.flush()
     return {
         "stuck_resume": stuck_resume.id, "done_resume": done_resume.id, "job": job.id,
         "match": match.id, "running": running.id, "waiting": waiting.id,
-        "roadmap": roadmap.id, "run_id": run_id,
+        "roadmap": roadmap.id, "run_id": run_id, "sending": sending.id, "sent": sent.id,
     }
 
 
@@ -90,7 +97,10 @@ async def test_stale_in_progress_work_reaches_an_explicit_failure(db_session, mo
     later = dt.datetime.now(dt.UTC) + STALE_AFTER + dt.timedelta(minutes=1)
     counts = await sweep_stuck_jobs({}, now=later)
 
-    assert counts == {"resumes": 1, "jobs": 1, "matches": 1, "agent_runs": 1, "roadmaps": 1}
+    assert counts == {
+        "resumes": 1, "jobs": 1, "matches": 1, "agent_runs": 1, "roadmaps": 1,
+        "application_emails": 1,
+    }
     db_session.expire_all()
 
     async def one(model, pk):
@@ -106,6 +116,11 @@ async def test_stale_in_progress_work_reaches_an_explicit_failure(db_session, mo
     # Waiting on a human is a legitimate long-lived state: never swept.
     assert (await one(AiSession, ids["waiting"])).status == "awaiting_approval"
     assert (await one(LearningRecommendation, ids["roadmap"])).status == "archived"
+    # An email stuck mid-send is failed with an inbox-check note, never resent;
+    # one that was sent stays sent.
+    stuck_email = await one(ApplicationEmail, ids["sending"])
+    assert stuck_email.status == "failed" and "Check the inbox" in stuck_email.send_error
+    assert (await one(ApplicationEmail, ids["sent"])).status == "sent"
 
     channels = {channel for channel, _ in redis.published}
     assert f"sse:resume:{ids['stuck_resume']}" in channels

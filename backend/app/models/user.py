@@ -30,3 +30,7 @@ class User(Base, TimestampMixin):
     )
     email_verified_at: Mapped[dt.datetime | None] = mapped_column()
     last_login_at: Mapped[dt.datetime | None] = mapped_column()
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None

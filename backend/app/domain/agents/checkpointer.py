@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -11,8 +12,14 @@ _cm: Any | None = None
 
 
 def _psycopg_dsn(settings: Settings) -> str:
-    """Return the psycopg-style DSN by stripping the asyncpg driver token."""
-    return settings.database_url.replace("+asyncpg", "")
+    """The same database as ``DATABASE_URL``, spelled for psycopg/libpq.
+
+    Drops the ``+asyncpg`` driver token, and renames asyncpg's ``ssl=`` query
+    option to libpq's ``sslmode=`` (hosted Postgres such as Supabase needs TLS).
+    """
+    parts = urlsplit(settings.database_url.replace("+asyncpg", "", 1))
+    query = [("sslmode" if k == "ssl" else k, v) for k, v in parse_qsl(parts.query)]
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 async def get_checkpointer(settings: Settings) -> Any:

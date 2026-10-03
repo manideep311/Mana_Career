@@ -80,3 +80,27 @@ async def test_token_hash_unique(db_session):
         ))
     with pytest.raises(IntegrityError):
         await db_session.flush()
+
+
+async def test_auth_token_purpose_is_constrained_and_hash_unique(db_session):
+    from app.models.auth import AuthToken
+
+    u = await _mk_user(db_session, "tokens@example.com")
+    expires = dt.datetime.now(dt.UTC) + dt.timedelta(minutes=30)
+    db_session.add(AuthToken(user_id=u.id, purpose="password_reset", token_hash="h" * 64,
+                             expires_at=expires))
+    await db_session.flush()
+    db_session.add(AuthToken(user_id=u.id, purpose="email_verify", token_hash="h" * 64,
+                             expires_at=expires))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+
+
+async def test_auth_token_rejects_unknown_purpose(db_session):
+    from app.models.auth import AuthToken
+
+    u = await _mk_user(db_session, "tokens2@example.com")
+    db_session.add(AuthToken(user_id=u.id, purpose="magic_link", token_hash="k" * 64,
+                             expires_at=dt.datetime.now(dt.UTC)))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()

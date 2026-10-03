@@ -133,3 +133,10 @@ def test_skill_plan_prioritises_required_gaps_and_stays_short():
     assert next(s for s in steps if s.slug == "docker").roadmap_position == 2
     for step in steps:
         assert step.why_it_matters and step.current_evidence and step.practice_project
+
+
+def test_family_count_groups_titles_and_ignores_blanks():
+    from app.domain.career.service import family_count
+
+    titles = ["Senior Backend Engineer", "Backend Engineer, Payments", "Data Analyst", None, "  "]
+    assert family_count(titles) == 2

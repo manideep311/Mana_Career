@@ -202,3 +202,13 @@ async def test_rotate_locks_the_presented_token(db_session):
     assert any(
         "FROM refresh_tokens" in s and "FOR UPDATE" in s for s in statements
     ), statements
+
+
+async def test_wrong_current_password_is_forbidden_not_unauthorised(db_session):
+    """A typo must not read as an expired session (401 signs the browser out)."""
+    svc = _svc(db_session)
+    reg = await svc.register("typo@x.com", "old-passphrase", "T", ip=None, user_agent=None)
+    with pytest.raises(ForbiddenError):
+        await svc.change_password(reg.user, "not-my-password", "new-passphrase",
+                                  ip=None, user_agent=None)
+

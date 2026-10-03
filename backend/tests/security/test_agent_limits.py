@@ -41,6 +41,7 @@ from sqlalchemy import select
 
 from app.domain.agents.graph import build_graph
 from app.domain.agents.service import AgentService
+from app.domain.applications.sending import set_approval_recipient
 from app.models.ai import AgentStep, AiSession
 from app.models.application import Application, ApplicationEmail, ApprovalRequest
 from app.models.job import Job
@@ -220,6 +221,9 @@ async def test_approve_runs_the_send_path(db_session, monkeypatch, fake_redis) -
     )
     application, approval = await _run_to_pause(db_session, run_id, job)
 
+    await set_approval_recipient(
+        db_session, user_id=u.id, approval=approval, to_email="hiring@acme.test", to_name=None
+    )
     approval.status = "approved"
     approval.decided_by = u.id
     approval.decided_at = datetime.now(UTC)

@@ -5,7 +5,13 @@ import uuid
 
 from sqlalchemy import select
 
-from app.models.application import Application, ApprovalRequest
+from app.domain.applications.snapshot import build_snapshot, hash_snapshot
+from app.models.application import (
+    Application,
+    ApplicationEmail,
+    ApprovalRequest,
+    CoverLetter,
+)
 from app.models.job import Job
 from app.models.user import User
 
@@ -74,30 +80,129 @@ async def test_decide_approval_rejects_a_second_decision(client, db_session):
     )
     db_session.add(job)
     await db_session.flush()
-    application = Application(user_id=user.id, job_id=job.id, status="awaiting_approval")
-    db_session.add(application)
-    await db_session.flush()
+    approval = await _seed_reviewable(db_session, user, job)
+
+    r1 = await client.post(
+        f"/api/v1/approvals/{approval.id}", headers=h, json=_APPROVE
+    )
+    assert r1.status_code == 202
+
+    r2 = await client.post(
+        f"/api/v1/approvals/{approval.id}", headers=h, json=_APPROVE
+    )
+    assert r2.status_code == 409
+
+
+_APPROVE = {"decision": "approve", "to_email": "hiring@acme.test", "to_name": "Hiring Team"}
+
+
+async def _seed_reviewable(db_session, user, job):
+    """A paused prepare_application run whose approval hashes the real content."""
     from app.domain.agents.service import AgentService
 
+    letter = CoverLetter(user_id=user.id, job_id=job.id, content="Dear Acme, ...")
+    email = ApplicationEmail(
+        user_id=user.id, job_id=job.id, subject="Application", body="Hello, attached."
+    )
+    db_session.add_all([letter, email])
+    await db_session.flush()
+    application = Application(
+        user_id=user.id, job_id=job.id, status="awaiting_approval",
+        cover_letter_id=letter.id, application_email_id=email.id,
+    )
+    db_session.add(application)
+    await db_session.flush()
     session = await AgentService(db_session).create_session(user.id, kind="agent_run")
     await AgentService(db_session).start_run(
         user.id, session.id, goal="prepare_application", inputs={"job_id": str(job.id)}
     )
     await db_session.refresh(session)
     session.status = "awaiting_approval"
+    snap = build_snapshot(job.title or "", job.company or "", None, letter, email)
     approval = ApprovalRequest(
         user_id=user.id, application_id=application.id, ai_session_id=session.id,
-        run_id=session.run_id, payload_hash="a" * 64,
+        run_id=session.run_id, payload_snapshot=snap, payload_hash=hash_snapshot(snap),
     )
     db_session.add(approval)
     await db_session.flush()
+    return approval
 
-    r1 = await client.post(
+
+async def _decide_setup(client, db_session, address):
+    h = await _auth(client, address)
+    user = (
+        await db_session.execute(select(User).where(User.email == address))
+    ).scalar_one()
+    job = Job(
+        user_id=None, is_seed=True, source="seed", status="ready", raw_text="x" * 60,
+        title="Backend Engineer", company="Acme", required_skills=[], preferred_skills=[],
+    )
+    db_session.add(job)
+    await db_session.flush()
+    return h, await _seed_reviewable(db_session, user, job)
+
+
+async def test_approving_records_the_recipient_inside_the_approval(client, db_session):
+    h, approval = await _decide_setup(client, db_session, "approval-recipient@x.com")
+    r = await client.post(f"/api/v1/approvals/{approval.id}", headers=h, json=_APPROVE)
+    assert r.status_code == 202
+    await db_session.refresh(approval)
+    assert approval.status == "approved"
+    assert approval.payload_snapshot["email"]["to_email"] == "hiring@acme.test"
+
+
+async def test_approving_without_a_recipient_is_refused(client, db_session):
+    h, approval = await _decide_setup(client, db_session, "approval-norecipient@x.com")
+    r = await client.post(
         f"/api/v1/approvals/{approval.id}", headers=h, json={"decision": "approve"}
     )
-    assert r1.status_code == 202
-
-    r2 = await client.post(
-        f"/api/v1/approvals/{approval.id}", headers=h, json={"decision": "approve"}
+    assert r.status_code == 422
+    bad = await client.post(
+        f"/api/v1/approvals/{approval.id}", headers=h,
+        json={**_APPROVE, "to_email": "hiring@acme.test" + chr(13) + chr(10) + "Bcc: v@evil.test"},
     )
-    assert r2.status_code == 409
+    assert bad.status_code == 422
+    await db_session.refresh(approval)
+    assert approval.status == "pending"
+
+
+async def test_rejecting_needs_no_recipient(client, db_session):
+    h, approval = await _decide_setup(client, db_session, "approval-reject@x.com")
+    r = await client.post(
+        f"/api/v1/approvals/{approval.id}", headers=h, json={"decision": "reject"}
+    )
+    assert r.status_code == 202
+
+
+async def test_content_changed_since_review_blocks_approval(client, db_session):
+    h, approval = await _decide_setup(client, db_session, "approval-changed@x.com")
+    approval.payload_hash = "b" * 64  # the reviewed content no longer matches
+    await db_session.flush()
+    r = await client.post(f"/api/v1/approvals/{approval.id}", headers=h, json=_APPROVE)
+    assert r.status_code == 409
+    assert r.json()["code"] == "approval.changed"
+
+
+async def test_approval_needs_a_confirmed_email_when_real_mail_is_on(
+    client, db_session, monkeypatch
+):
+    from app.core.config import get_settings
+
+    h, approval = await _decide_setup(client, db_session, "approval-unverified@x.com")
+    # Scoped: only these env changes are undone, and the settings cache is
+    # cleared on both sides so no other test sees SMTP settings.
+    with monkeypatch.context() as mp:
+        mp.setenv("EMAIL_PROVIDER", "smtp")
+        mp.setenv("SMTP_HOST", "smtp.example.com")
+        mp.setenv("EMAIL_FROM_ADDRESS", "applications@example.com")
+        get_settings.cache_clear()
+        try:
+            r = await client.post(f"/api/v1/approvals/{approval.id}", headers=h, json=_APPROVE)
+        finally:
+            get_settings.cache_clear()
+    get_settings.cache_clear()
+    assert r.status_code == 409
+    assert r.json()["code"] == "email_unverified"
+    await db_session.refresh(approval)
+    assert approval.status == "pending"
+

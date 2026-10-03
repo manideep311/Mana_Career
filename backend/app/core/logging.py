@@ -13,7 +13,8 @@ from app.core.config import Settings
 SECRET_KEYS: frozenset[str] = frozenset({
     "password", "token", "authorization", "api_key", "apikey", "jwt_secret",
     "secret", "refresh_token", "access_token", "set-cookie", "cookie",
-    "jwt", "database_url",
+    "jwt", "database_url", "service_role_key", "supabase_service_role_key",
+    "proxy_shared_secret", "smtp_password",
 })
 SECRET_PATTERN: re.Pattern[str] = re.compile(
     r"(sk-[A-Za-z0-9_\-]{8,})"

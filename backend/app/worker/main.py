@@ -62,7 +62,8 @@ class WorkerSettings:
     cron_jobs: ClassVar[list[Any]] = [
         cron(sweep_stuck_jobs, minute=set(range(0, 60, 5)), unique=True, timeout=120)
     ]
-    max_jobs = 10
+    # Small hosts (worker inside the API on 512 MB) lower this.
+    max_jobs = _settings.worker_max_jobs
     job_timeout = 300
     max_tries = MAX_TRIES
     # Tasks raise arq.worker.Retry on transient errors (app.worker.retry).

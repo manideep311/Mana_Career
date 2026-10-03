@@ -4,10 +4,11 @@ import uuid
 
 from fastapi import APIRouter, Query, Response, status
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import CurrentUser, DbDep, SettingsDep
 from app.api.v1.schemas.ai import RunRefOut
 from app.api.v1.schemas.applications import (
     ApplicationCreateIn,
+    ApplicationDeliveryOut,
     ApplicationListOut,
     ApplicationNoteIn,
     ApplicationOut,
@@ -16,9 +17,12 @@ from app.api.v1.schemas.applications import (
     TimelineItemOut,
 )
 from app.core.audit import audit
+from app.core.errors import ConflictError
 from app.domain.agents.service import AgentService
+from app.domain.applications.sending import latest_approval, send_approved_application
 from app.domain.applications.service import ApplicationService, TimelineItem
-from app.models.application import Application
+from app.domain.email.factory import get_email_sender
+from app.models.application import Application, ApplicationEmail
 from app.models.application_event import ApplicationEvent
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -135,3 +139,61 @@ async def get_application_timeline(
 ) -> ApplicationTimelineOut:
     items = await ApplicationService(db).timeline(user.id, application_id)
     return ApplicationTimelineOut(items=[_timeline_item_out(it) for it in items])
+
+
+def _delivery_out(email: ApplicationEmail | None) -> ApplicationDeliveryOut:
+    if email is None:
+        return ApplicationDeliveryOut(
+            status="none", intended_to=None, delivered_to=None, redirected=False,
+            sent_at=None, error=None,
+        )
+    redirected = bool(
+        email.delivered_to and email.to_email
+        and email.delivered_to.lower() != email.to_email.lower()
+    )
+    return ApplicationDeliveryOut(
+        status=email.status,
+        intended_to=email.to_email, delivered_to=email.delivered_to, redirected=redirected,
+        sent_at=email.sent_at, error=email.send_error,
+    )
+
+
+async def _email_of(db: DbDep, application: Application) -> ApplicationEmail | None:
+    if application.application_email_id is None:
+        return None
+    return await db.get(ApplicationEmail, application.application_email_id)
+
+
+@router.get("/{application_id}/delivery")
+async def get_application_delivery(
+    application_id: uuid.UUID, db: DbDep, user: CurrentUser
+) -> ApplicationDeliveryOut:
+    application = await ApplicationService(db).get(user.id, application_id)
+    return _delivery_out(await _email_of(db, application))
+
+
+@router.post("/{application_id}/send")
+async def retry_application_send(
+    application_id: uuid.UUID, db: DbDep, user: CurrentUser, settings: SettingsDep
+) -> ApplicationDeliveryOut:
+    """Try a failed send again. Same rules as the first attempt: still approved,
+    content unchanged since review, never while an attempt is in flight."""
+    application = await ApplicationService(db).get(user.id, application_id)
+    email = await _email_of(db, application)
+    if email is None or email.status != "failed":
+        raise ConflictError(
+            "Only an application email that failed to send can be sent again.",
+            code="application.not_retryable",
+        )
+    approval = await latest_approval(db, application.id)
+    if approval is None or approval.status != "approved":
+        raise ConflictError(
+            "This application hasn't been approved.", code="application.not_approved"
+        )
+    await send_approved_application(
+        db, user_id=user.id, approval=approval, sender=get_email_sender(settings),
+        settings=settings,
+    )
+    await db.commit()
+    return _delivery_out(email)
+

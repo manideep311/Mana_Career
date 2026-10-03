@@ -111,6 +111,8 @@ class ApplicationEmail(Base, TimestampMixin):
     provider_message_id: Mapped[str | None] = mapped_column(String(200))
     sent_at: Mapped[dt.datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     send_error: Mapped[str | None] = mapped_column(Text)
+    # Where it really went: the applicant's own inbox in "redirect" delivery mode.
+    delivered_to: Mapped[str | None] = mapped_column(String(320))
     generation_meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )

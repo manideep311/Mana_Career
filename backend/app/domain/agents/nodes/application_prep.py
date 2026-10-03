@@ -6,37 +6,17 @@ a pending ``ApprovalRequest``. No LLM call. Runs once (guard()-wrapped,
 normal node -- unlike ``human_approval``, this never re-executes on resume).
 """
 
-import hashlib
-import json
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from app.domain.agents.state import ManaState
+from app.domain.applications.snapshot import build_snapshot as _build_snapshot
+from app.domain.applications.snapshot import hash_snapshot as _hash_snapshot
 from app.domain.jobs.service import JobService
 from app.models.application import Application, ApplicationEmail, ApprovalRequest, CoverLetter
 
 if TYPE_CHECKING:
     from app.domain.agents.graph import AgentDeps
-
-
-def _build_snapshot(
-    job_title: str, company: str, resume_version_id: str | None,
-    letter: CoverLetter, email: ApplicationEmail,
-) -> dict[str, Any]:
-    return {
-        "job": {"title": job_title, "company": company},
-        "resume_version_id": resume_version_id,
-        "cover_letter": {"id": str(letter.id), "content": letter.content},
-        "email": {
-            "id": str(email.id), "to_email": email.to_email, "to_name": email.to_name,
-            "subject": email.subject, "body": email.body,
-        },
-    }
-
-
-def _hash_snapshot(snapshot: dict[str, Any]) -> str:
-    encoded = json.dumps(snapshot, sort_keys=True, default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
 
 
 async def application_prep(state: ManaState, *, deps: "AgentDeps") -> dict[str, Any]:

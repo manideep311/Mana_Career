@@ -14,6 +14,7 @@ from __future__ import annotations
 import dataclasses
 from types import SimpleNamespace
 
+from app.core.config import get_settings
 from app.domain.agents.nodes.application_prep import _build_snapshot, _hash_snapshot
 from app.domain.agents.nodes.email_external_action import email_external_action
 from app.domain.embeddings.adapters.fake import FakeEmbeddingsProvider
@@ -269,7 +270,7 @@ async def test_approval_hash_gate_catches_tampered_email_body(db_session) -> Non
 
     sender = _RecordingSender()
     deps = SimpleNamespace(
-        session=db_session, user_id=user.id, email_sender=sender,
+        session=db_session, user_id=user.id, email_sender=sender, settings=get_settings(),
         svc=None, session_id=application.id, run_id=approval.run_id,
     )
 
@@ -278,7 +279,7 @@ async def test_approval_hash_gate_catches_tampered_email_body(db_session) -> Non
     )
 
     assert out["status"] == "halted"
-    assert "payload changed" in out["error"]
+    assert "changed after you reviewed it" in out["error"]
     assert sender.calls == []  # never reached the send step
     assert email.status != "sent"
     assert application.status != "applied"

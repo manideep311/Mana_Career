@@ -22,6 +22,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.domain.agents.budget import guard
 from app.domain.agents.nodes.application_prep import application_prep
 from app.domain.agents.nodes.claim_validator import claim_validator
@@ -57,6 +58,7 @@ class AgentDeps:
     publish: Callable[[dict[str, Any]], Awaitable[None]]
     svc: AgentService
     email_sender: EmailSender
+    settings: Settings
     user_id: uuid.UUID
     run_id: str
     session_id: uuid.UUID

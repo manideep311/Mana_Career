@@ -77,3 +77,13 @@ def hash_refresh_token(raw: str) -> str:
 def new_refresh_token() -> tuple[str, str]:
     raw = secrets.token_urlsafe(32)
     return raw, hash_refresh_token(raw)
+
+
+def new_link_token() -> tuple[str, str]:
+    """A token for an emailed link: (raw for the URL, sha256 for the database)."""
+    raw = secrets.token_urlsafe(32)
+    return raw, hash_link_token(raw)
+
+
+def hash_link_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
