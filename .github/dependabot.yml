@@ -18,6 +18,11 @@ updates:
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # arq (the job queue) requires redis<6, so newer redis can't be resolved.
+      # Remove this once an arq release allows redis 6+.
+      - dependency-name: redis
+        versions: [">=6"]
 
   - package-ecosystem: npm
     directory: /frontend
