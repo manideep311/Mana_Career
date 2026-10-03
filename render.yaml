@@ -1,0 +1,131 @@
+# Render Blueprint for Mana Career's backend (free plan).
+#
+#   Render   : the API, with the background worker running inside it
+#              (RUN_WORKER_IN_API) because the free plan has no worker type,
+#              plus a free Key Value (Redis) instance for the job queue.
+#   Supabase : Postgres (with pgvector) and a private Storage bucket for résumés.
+#   Vercel   : the website; it forwards /api to this service.
+#
+# Step-by-step setup: docs/deploy.md. Values marked `sync: false` are secrets or
+# per-deployment addresses that Render asks for when the Blueprint is applied;
+# they never live in this file.
+#
+# Moving off the free plan later: set `plan: starter`, RUN_WORKER_IN_API=false,
+# and add a `type: worker` service running `arq app.worker.main.WorkerSettings`.
+
+services:
+  - type: web
+    name: mana-career-api
+    runtime: docker
+    plan: free
+    # Keep this next to the Supabase project's region (e.g. Supabase Singapore
+    # or Mumbai -> singapore; Frankfurt -> frankfurt; US East -> virginia).
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # `sh` so the script needs no executable bit (commits from Windows lack it).
+    dockerCommand: sh scripts/render-start.sh
+    healthCheckPath: /health
+    # Deploy only commits whose CI checks passed.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - backend/**
+    envVars:
+      - key: ENV
+        value: prod
+      - key: LOG_LEVEL
+        value: info
+
+      # --- Database (Supabase "Session pooler" connection string) ----------
+      # postgresql+asyncpg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
+      - key: DATABASE_URL
+        sync: false
+      # Supabase's free session pooler allows ~15 clients; stay well under it.
+      - key: DATABASE_POOL_SIZE
+        value: "3"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "2"
+
+      # --- Queue ------------------------------------------------------------
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: mana-career-redis
+          property: connectionString
+      - key: RUN_WORKER_IN_API
+        value: "true"
+      - key: WORKER_MAX_JOBS
+        value: "3"
+
+      # --- Sign-in & the web app -------------------------------------------
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_COOKIE_SECURE
+        value: "true"
+      # The Vercel address, e.g. https://mana-career.vercel.app
+      - key: APP_BASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      # Copy this generated value into Vercel's PROXY_SHARED_SECRET.
+      - key: PROXY_SHARED_SECRET
+        generateValue: true
+
+      # --- Résumé files (private Supabase Storage bucket) ------------------
+      - key: FILE_STORE
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: resumes
+
+      # --- AI: free demo mode ---------------------------------------------
+      # No AI keys needed: the site says plainly that it's a demo, résumé
+      # details are typed on the review screen, and written drafts use simple
+      # templates. Real AI later: docs/deploy.md, "Turning on real AI".
+      - key: LLM_PROVIDER
+        value: fake
+      - key: EMBEDDINGS_PROVIDER
+        value: fake
+      - key: EMBED_MODEL
+        value: fake-embed-1
+      - key: DEMO_MODE
+        value: "true"
+      - key: SEARCH_PROVIDER
+        value: none
+      # Load the career catalogue on the first start (skipped once it exists).
+      - key: SEED_ON_START
+        value: "true"
+
+      # --- Email (Brevo's free plan) ----------------------------------------
+      # Render's free plan blocks ports 25/465/587; Brevo also listens on 2525
+      # (STARTTLS). Using Resend instead: smtp.resend.com, port 2587.
+      - key: EMAIL_PROVIDER
+        value: smtp
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "2525"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_SECURITY
+        value: starttls
+      - key: EMAIL_FROM_ADDRESS
+        sync: false
+      # Application emails go to the applicant's own inbox, not employers.
+      - key: EMAIL_DELIVERY
+        value: redirect
+
+  - type: keyvalue
+    name: mana-career-redis
+    plan: free
+    region: singapore
+    # Reachable only from services in this Render account.
+    ipAllowList: []
+    # A job queue must never silently drop queued jobs to free memory.
+    maxmemoryPolicy: noeviction

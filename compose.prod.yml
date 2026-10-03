@@ -175,6 +175,8 @@ services:
       target: runner
       args:
         NEXT_PUBLIC_API_BASE_URL: ""
+        # Absolute URLs for the link-preview image (same value as the backend's).
+        NEXT_PUBLIC_SITE_URL: ${APP_BASE_URL:-}
     networks: [ingress]
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
