@@ -26,6 +26,11 @@ RUN pnpm build
 
 FROM node:22-slim AS runner
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
+# Apply Debian security fixes published since the base image was built (the
+# image scan in CI fails on fixable HIGH/CRITICAL findings).
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 # The standalone server runs `node server.js` — no package manager needed at
 # runtime. Drop the bundled npm/corepack/yarn: smaller image, no CVEs from
 # npm's vendored deps (brace-expansion, tar, pacote, sigstore, …).

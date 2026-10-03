@@ -1,5 +1,10 @@
 FROM python:3.12-slim AS base
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 UV_LINK_MODE=copy
+# Apply Debian security fixes published since the base image was built (the
+# image scan in CI fails on fixable HIGH/CRITICAL findings).
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv
 WORKDIR /app
 
@@ -13,7 +18,8 @@ EXPOSE 8000
 CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 FROM base AS prod
-ENV UV_COMPILE_BYTECODE=1
+# No download cache in the shipped image: it only adds size.
+ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 # Dependency layer only — no project, no dev group (cached until pyproject/lock change)
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
