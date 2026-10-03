@@ -48,9 +48,9 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
 - [x] D. Rate limiter (R8) + client-IP helper
 - [x] E. Upload body guard (R9)
 - [x] F. Ops: compose limits/logging/healthchecks/backups; nginx headers (R6); CI hardening
-- [ ] G. Frontend reliability: single-flight refresh, bounded polling, error/not-found/loading pages
-- [ ] H. Guidance engine: résumé analysis, skill evidence, career paths, skill-gap detail, roadmap phases
-- [ ] I. UI: tokens/typography, landing, paper rocket, contextual progress, dashboard, paths, résumé,
+- [x] G. Frontend reliability: single-flight refresh, bounded polling, error/not-found/loading pages
+- [x] H. Guidance engine: résumé analysis, skill evidence, career paths, skill-gap detail, roadmap phases
+- [x] I. UI: tokens/typography, landing, paper rocket, contextual progress, dashboard, paths, résumé,
       matching, roadmap, empty states, micro-interactions, responsive, a11y
 - [ ] J. Verification + final report
 
@@ -98,3 +98,28 @@ Source of requirements: the 2026-09-29 audit (in chat) + the 51-point product br
   setup-node v7, setup-uv v10, pnpm v6, buildx v4, trivy v0.36.0), permissions contents:read,
   concurrency, timeouts, pnpm build step, all-services-healthy gate; Dependabot (actions/uv/npm/docker);
   runbook + SECURITY.md updated; runbook mis-encoded bytes repaired. Branch protection -> owner (R12).
+- 25261ad CI green (all 4 jobs: health gate, headers smoke, backup round-trip).
+- G (613fbea): match polling backs off 2 s -> 10 s and stops after 3 min with a "Check again" affordance;
+  résumé stall escape hatch kept. Route boundaries shipped with I.
+- H (b1aa15b): deterministic guidance layer (no model calls): taxonomy skill scanner; résumé analysis
+  (problem / why / suggestion, grounded strengths, target gaps framed as skill gaps); role families;
+  career paths (demand, coverage, fit in words, seniority downgrade, evidence, related, <=3 actions,
+  thin-evidence flag); skill plan (<=5, resource + practice project + roadmap position); /career API +
+  /resumes/{id}/analysis; roadmap template milestone when the model draft is empty/fails
+  (generation_meta.drafted_by), phases current/next_30/next_60_90/later at a stated weekly pace.
+  Ruling: no server-side jobs `path` filter (families come from titles in Python) - the Apply action
+  links to the path page's roles list instead - cost if wrong: one extra click to reach the jobs list.
+  CI run 36559165559 green (all 4 jobs, incl. the DB-gated /career API tests).
+- I (7876c44): tokens + Newsreader display serif, paper rocket + LaunchProgress (honest stages,
+  aria-live, reduced-motion still frame), landing, dashboard hierarchy, /career pages, résumé review
+  panel, roadmap phases, word-first match badges, route error/not-found/loading boundaries, demo-mode
+  note, nav (Paths, Growth, core mobile tabs). Ruling: the "Mana AI - Soon" nav stub removed (a
+  promise with no page) - cost if wrong: re-add one line when the assistant page ships. Visual check in
+  the browser pane: desktop hero + journey line, rocket frame sequence, 375 px with no horizontal
+  overflow and a 44 px CTA.
+- J verification (local): backend ruff/mypy(192 files)/lint-imports(3 kept)/pytest 370 passed locally
+  (DB/Redis-gated tests run in CI); pip-audit clean; frontend tsc, lint, vitest 68 files / 232 tests;
+  `pnpm build` compiles + type-checks + prerenders 15/15 locally, then hits the known Windows symlink
+  EPERM in standalone tracing (CI builds on Linux); pnpm audit: 2 moderate, dev-only (vitest <4.1.11,
+  fix needs the vitest 4 major) - deferred, CI gate is --audit-level=high; compose.prod.yml config valid.
+

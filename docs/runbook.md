@@ -5,6 +5,9 @@ FastAPI `api`, the ARQ `worker`, the Next.js standalone `frontend`, and an
 `nginx` reverse proxy terminating TLS. A one-shot `migrate` service runs
 `alembic upgrade head` before `api`/`worker` start.
 
+Hosting on free managed plans instead (Supabase + Render + Vercel, no servers to
+run)? Follow `docs/deploy.md`; the backend settings it uses are in `render.yaml`.
+
 `AI recommends -> AI prepares -> Human decides` — nothing is emailed without an
 explicit in-app approval; see `SECURITY.md` and `docs/threat-model.md`.
 
@@ -134,6 +137,82 @@ Uvicorn to trust every peer or the entire bridge subnet.
 | Check the worker heartbeat | `docker compose -f compose.prod.yml exec worker arq --check app.worker.main.WorkerSettings` |
 | Stop (keep data) | `docker compose -f compose.prod.yml down` |
 | Stop and wipe data | `docker compose -f compose.prod.yml down -v` |
+
+### Email
+
+Application emails leave the server only after the applicant approves them on
+the review card, where they also type the hiring contact's address.
+
+- **Default (`EMAIL_PROVIDER=console`)**: nothing is sent; the send is logged
+  and the application is recorded as sent.
+- **Real delivery (`EMAIL_PROVIDER=smtp`)**: set `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SECURITY` and `EMAIL_FROM_ADDRESS`,
+  then restart `api` and `worker`. For a portfolio, a Gmail account with an
+  [app password](https://support.google.com/accounts/answer/185833) works:
+  `smtp.gmail.com`, port `587`, `starttls`, the Gmail address as both username
+  and `EMAIL_FROM_ADDRESS`. On your own domain, add the provider's SPF and DKIM
+  records or mail will land in spam.
+- **Where it goes (`EMAIL_DELIVERY`)**: `redirect` (default) delivers every
+  application email to the applicant's own inbox with a note naming the employer
+  address, so a public demo can't be used to email strangers. `live` sends to
+  the employer with a copy to the applicant. Replies always go to the applicant.
+- **Limits**: `EMAIL_DAILY_LIMIT_PER_USER` (5) and `EMAIL_DAILY_LIMIT_TOTAL`
+  (100) successful sends per UTC day.
+- **Never twice**: an attempt claims the email with one conditional update and
+  commits it as `sending` before the mail server is contacted, so two
+  simultaneous attempts can't both send. An attempt under 10 minutes old is
+  left alone (it may still be delivering). If the worker dies mid-send, the
+  email becomes `failed` with a note to check the inbox (on the next attempt,
+  or from the sweeper after 20 minutes); the applicant can press "Try sending
+  again".
+- **Account emails**: sign-up sends a "Confirm your email" link (48 hours) and
+  "Forgot your password?" sends a reset link (30 minutes, signs out every
+  device). Links point at `APP_BASE_URL` (https in production when email is on)
+  and carry their token after `#`. At most 3 of each per account per hour.
+  With `EMAIL_PROVIDER=smtp`, applications are only sent from confirmed
+  addresses. In local development with the console sender, the link is printed
+  in the API log (`account_email_link_dev_only`); never in test or production.
+- **Local testing**: `docker compose up mailpit`, then `SMTP_HOST=localhost`
+  (or `mailpit` inside compose), `SMTP_PORT=1025`, `SMTP_SECURITY=none`, and
+  read the mail at http://localhost:8025. CI runs a real round trip against
+  Mailpit (`tests/domain/email/test_smtp_mailpit.py`).
+
+### Account data (export and deletion)
+
+People manage this themselves from the Profile page:
+
+- **Download your data** (`GET /api/v1/account/export`) returns a ZIP with
+  `mana-career-data.json` (everything they added or that was generated for
+  them) and their uploaded résumé PDFs. Password and token hashes, search
+  vectors and processing metadata are never included.
+- **Delete account** (`DELETE /api/v1/account`, password + the word `DELETE`)
+  removes the user row, which cascades to every user-owned table, then (after
+  the commit) their résumé files and the agent's saved run state. Audit rows
+  stay as the security record with IP, browser and before/after snapshots
+  erased, plus one `account.deleted` entry. It can't be undone: backups taken
+  before the deletion still contain the data until they age out
+  (`BACKUP_KEEP_DAYS`, 14 days by default).
+
+### End-to-end tests
+
+`frontend/e2e/` drives a real browser (Playwright) through the running stack:
+landing → sign up → résumé upload and confirmation → dashboard guidance →
+preparing and approving an application → the applications board; plus forgot
+password, an expired reset link, and signing out on desktop and on a phone.
+CI runs them in the `images` job against the production stack (demo mode).
+
+To run them locally against the production stack:
+
+```bash
+docker compose -f compose.prod.yml up -d
+docker compose -f compose.prod.yml run --rm migrate python -m app.seed all
+cd frontend
+pnpm exec playwright install chromium
+E2E_BASE_URL=https://localhost pnpm e2e
+```
+
+Each run creates throwaway accounts on `example.invalid` addresses. On a CI
+failure, download the `playwright-report` artifact for screenshots and traces.
 
 ## 5. Backup
 
