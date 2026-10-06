@@ -85,6 +85,9 @@ export async function uploadAndConfirmResume(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "Review what we found" })).toBeVisible({
     timeout: 90_000,
   });
+  // Even without an AI model (demo providers), the skills the résumé names
+  // are found by matching it against the skills catalogue.
+  await expect(page.getByLabel("Skills", { exact: true })).toHaveValue(/Python/);
   await page.getByRole("button", { name: /Confirm & build my profile/ }).click();
   await expect(page).toHaveURL(/\/dashboard$/, { timeout: 30_000 });
 }

@@ -32,7 +32,7 @@ signed in, a banner at the top of the app says so.
 
 | Works fully | Works differently |
 |---|---|
-| Accounts, email confirmation, password reset, account export/delete | Résumé details aren't read automatically: after uploading, people type their skills on the review screen and add experience on the Profile page |
+| Accounts, email confirmation, password reset, account export/delete | From a résumé, only skills (matched against the skills catalogue), email and GitHub/LinkedIn links are picked up; experience and education are added on the Profile page |
 | Résumé upload and "How your résumé reads" | Cover letters and tailored résumés use simple templates |
 | Career paths, job matching, skill plans (all rule-based, no AI) | Roadmap planning has no AI-written steps |
 | Applications: prepare, approve, send, track | |
@@ -151,8 +151,9 @@ passes.
    Render wakes up.
 2. **Create an account.** The confirmation email should arrive (check spam
    the first time); its link opens the Vercel site.
-3. **Upload a résumé.** Type your skills on the review screen and confirm; add
-   experience on the Profile page. Then look at the dashboard, career paths
+3. **Upload a résumé.** The review screen lists the skills found in it;
+   confirm, and add experience on the Profile page. Then look at the
+   dashboard (refresh once if it hasn't named a direction yet), career paths
    and jobs.
 4. **Prepare an application and approve it.** The email arrives in your own
    inbox (`EMAIL_DELIVERY=redirect` never emails an employer).

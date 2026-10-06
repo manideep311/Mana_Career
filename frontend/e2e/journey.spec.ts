@@ -31,6 +31,14 @@ test("from the landing page to an approved application", async ({ page }) => {
       page.getByRole("heading", { level: 1, name: /Good (morning|afternoon|evening), Asha/ }),
     ).toBeVisible();
     await expect(page.getByText("Your direction")).toBeVisible();
+    // The skills found in the résumé are enough to name a path. The profile is
+    // built in the background just after confirming, so look again until it is.
+    await expect(async () => {
+      await page.reload();
+      await expect(
+        page.getByRole("link", { name: "Why this path, and what's missing" }),
+      ).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 60_000 });
     await expect(page.getByRole("region", { name: "Your journey" })).toBeVisible();
     // Honest guidance: fit is described in words, never as a percentage.
     await expect(page.locator("main")).not.toContainText(/\d\s?%/);

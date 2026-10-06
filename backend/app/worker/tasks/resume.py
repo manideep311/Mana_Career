@@ -19,6 +19,7 @@ from app.domain.resume.parser import (
     SCANNED_PDF_MESSAGE,
     get_resume_parser,
 )
+from app.domain.resume.text_signals import complete_from_text
 from app.infra.storage.factory import get_file_store
 from app.models.resume import Resume
 from app.worker.dead_letter import record_failure
@@ -187,6 +188,9 @@ async def extract_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
                 get_llm_provider(settings), model=settings.llm_model_extraction
             )
             extraction = await extractor.extract(resume.extracted_text or "")
+            # Fill what the extractor left empty from the text itself: in demo
+            # mode (no AI model) this is how skills and links get found at all.
+            extraction = complete_from_text(extraction, resume.extracted_text or "")
 
             resume.extraction = extraction.model_dump()
             resume.status = "extracted"

@@ -84,8 +84,9 @@ services:
 
       # --- AI: free demo mode ---------------------------------------------
       # No AI keys needed: the site says plainly that it's a demo, résumé
-      # details are typed on the review screen, and written drafts use simple
-      # templates. Real AI later: docs/deploy.md, "Turning on real AI".
+      # skills are found by matching the skills catalogue (experience is added
+      # on the Profile page), and written drafts use simple templates.
+      # Real AI later: docs/deploy.md, "Turning on real AI".
       - key: LLM_PROVIDER
         value: fake
       - key: EMBEDDINGS_PROVIDER
