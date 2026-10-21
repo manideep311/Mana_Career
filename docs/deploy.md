@@ -61,14 +61,16 @@ pass CI, and be merged to `main` first.
 
 1. Sign up at supabase.com → **New project**. Choose a strong database
    password (save it in a password manager). Pick the region nearest your
-   visitors, e.g. **Mumbai** or **Singapore** for India.
+   visitors, e.g. **Mumbai** or **Singapore** for India. If the form offers
+   to expose new tables to the Data API automatically, turn that **off**.
 2. **Connection string**: click **Connect** → **Session pooler** and copy the
    URI. Rewrite it into the app's format:
 
    ```text
-   postgresql+asyncpg://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
+   postgresql+asyncpg://postgres.<ref>:<password>@aws-<n>-<region>.pooler.supabase.com:5432/postgres?ssl=require
    ```
 
+   - copy the host (`aws-<n>-<region>.pooler.supabase.com`) exactly as shown
    - `postgresql://` becomes `postgresql+asyncpg://`
    - add `?ssl=require` at the end
    - put your real password in, URL-encoding special characters (`@` → `%40`,
@@ -82,9 +84,9 @@ pass CI, and be merged to `main` first.
    `service_role` key). This key can read every stored file.
 5. **Switch off Supabase's automatic table API.** This app never uses it, and
    left on, anyone with the project's public key could read user data:
-   **Project Settings** → **Data API** → turn it **off** (or remove `public`
-   from the exposed schemas). There's one more lock-down step after the first
-   deploy (step 6).
+   in the **Data API** settings, switch **Enable Data API** off. (Supabase may
+   then log `pg_pgrst_no_exposed_schemas` messages; they're harmless.) There's
+   one more lock-down step after the first deploy (step 6).
 
 ## Step 2: Brevo (email)
 
