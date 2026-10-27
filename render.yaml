@@ -95,10 +95,12 @@ services:
       - key: LLM_API_KEY
         sync: false
       # Model calls per UTC day across all visitors, kept under Groq's free
-      # daily token allowance. Past it the AI features pause until tomorrow;
-      # matching, career paths and skill plans keep working.
+      # 200,000 tokens a day. Measured on gpt-oss-120b, the heaviest mix
+      # (tailored résumé, cover letter, email) averages ~1,780 tokens a call:
+      # 90% of 200,000 / 1,780 = 101. Past it the AI features pause until
+      # tomorrow; matching, career paths and skill plans keep working.
       - key: LLM_DAILY_CALL_LIMIT
-        value: "60"
+        value: "100"
       # AI requests per visitor per hour, so one visitor can't spend the day.
       - key: LLM_LIMIT_PER_HOUR
         value: "10"

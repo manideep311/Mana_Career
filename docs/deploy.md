@@ -43,8 +43,8 @@ deleted after 7 days (`DEMO_RETENTION_DAYS`).
 
 | Service | Limit | Effect |
 |---|---|---|
-| Groq | For `gpt-oss-120b`: 30 requests and 8,000 tokens a minute; 1,000 requests and 200,000 tokens a day (your account's **Limits** page has the exact figures) | `LLM_DAILY_CALL_LIMIT=60` keeps the demo under the daily tokens. Past it, AI features pause until midnight UTC and say so, while matching, career paths and skill plans keep working. A busy minute shows "The free AI quota is busy, try again shortly". |
-| Render | 512 MB memory | Measured: ~190 MiB idle, ~430 MiB with three visitors' résumé and agent runs at once (embedding model loaded) |
+| Groq | For `gpt-oss-120b`: 30 requests and 8,000 tokens a minute; 1,000 requests and 200,000 tokens a day (your account's **Limits** page has the exact figures) | `LLM_DAILY_CALL_LIMIT=100` keeps the demo under the daily tokens (measured ~1,780 tokens a call for the heaviest mix; one visitor going from résumé to a prepared application uses ~15,600 tokens in 11 calls). Past it, AI features pause until midnight UTC and say so, while matching, career paths and skill plans keep working. Within a minute, a prepared application (~12,000 tokens) waits for the 8,000-token window a few times, so it takes about 30 s; "The free AI quota is busy, try again shortly" appears only if a wait would be longer than 30 s. |
+| Render | 512 MB memory | Measured with Groq and the embedding model loaded: ~190 MiB idle, ~430 MiB peak for a full run from résumé to approval, 488 MiB after three runs back to back |
 | Render | Sleeps after 15 min without visitors; ~1 min to wake | The first visit after a quiet spell is slow |
 | Render | Mail ports 25/465/587 blocked | Email uses Brevo's port 2525 |
 | Render Key Value | Not saved to disk | Queued jobs are lost on a restart; the sweeper fails anything left mid-way |
@@ -100,7 +100,8 @@ pass CI, and be merged to `main` first.
    else.
 3. Optional: **Settings** → **Limits** shows your account's exact free limits
    for `openai/gpt-oss-120b`. If its tokens per day differ from 200,000, scale
-   `LLM_DAILY_CALL_LIMIT` in `render.yaml` to match (about 3,000 tokens a call).
+   `LLM_DAILY_CALL_LIMIT` in `render.yaml` to match (measured: about 1,780
+   tokens a call at most, so 90% of the daily tokens / 1,780).
 
 ## Step 3: Brevo (email)
 
