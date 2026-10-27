@@ -549,6 +549,10 @@ export interface AppMeta {
   ai_writing: boolean;
   web_research: boolean;
   email_delivery: EmailDeliveryMode;
+  /** Today's cap on AI calls is used up; the AI features are paused. */
+  ai_paused: boolean;
+  /** Accounts are deleted this many days after sign-up; 0 = kept. */
+  retention_days: number;
 }
 
 /* ------------------------------------------------------------------ catalog */

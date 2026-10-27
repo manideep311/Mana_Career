@@ -18,6 +18,7 @@ import { ExtractionReview } from "@/components/resume/ExtractionReview";
 import { ResumeAnalysisPanel } from "@/components/resume/ResumeAnalysisPanel";
 import { ResumeFailed } from "@/components/resume/ResumeFailed";
 import { ResumeList } from "@/components/resume/ResumeList";
+import { NoAiReaderNote, UploadPrivacyNote } from "@/components/resume/ResumeNotes";
 import { ResumeStepper } from "@/components/resume/ResumeStepper";
 import { ResumeVersionsList } from "@/components/resume/ResumeVersionsList";
 import { UploadDropzone } from "@/components/resume/UploadDropzone";
@@ -302,6 +303,7 @@ export default function ResumePage() {
           onFile={(f) => uploadMut.mutate(f)}
           disabled={uploadMut.isPending}
         />
+        <UploadPrivacyNote />
         {uploadMut.isPending ? (
           <p className="flex items-center gap-2 text-sm text-text-muted">
             <Spinner size="sm" />
@@ -363,11 +365,14 @@ export default function ResumePage() {
         return <ErrorState onRetry={() => void extractionQuery.refetch()} />;
       }
       return (
-        <ExtractionReview
-          extraction={extractionQuery.data}
-          onConfirm={(e) => confirmMut.mutateAsync(e)}
-          confirming={confirmMut.isPending}
-        />
+        <>
+          <NoAiReaderNote />
+          <ExtractionReview
+            extraction={extractionQuery.data}
+            onConfirm={(e) => confirmMut.mutateAsync(e)}
+            confirming={confirmMut.isPending}
+          />
+        </>
       );
     }
 
