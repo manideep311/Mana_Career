@@ -28,10 +28,14 @@ RUN uv sync --frozen --no-install-project --no-dev
 # any attempt to fetch it at run time.
 ARG LOCAL_EMBED_MODEL=BAAI/bge-small-en-v1.5
 ENV FASTEMBED_CACHE_PATH=/opt/models
-RUN /app/.venv/bin/python -c "import sys; from fastembed import TextEmbedding; TextEmbedding(sys.argv[1])" "$LOCAL_EMBED_MODEL"
+RUN /app/.venv/bin/python -c "import sys; from fastembed import TextEmbedding; TextEmbedding(sys.argv[1])" "$LOCAL_EMBED_MODEL" \
+    && chmod -R a+rX /opt/models
 # App source
 COPY . .
-RUN useradd --system --uid 10001 app && mkdir -p /app/var/files && chown -R app /app /opt/models
+# Only the upload directory belongs to the app user: the code, the virtualenv
+# and the model stay read-only (and a recursive chown would copy all of them
+# into another layer, doubling the image).
+RUN useradd --system --uid 10001 app && mkdir -p /app/var/files && chown app /app/var/files
 USER app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app ENV=prod HF_HUB_OFFLINE=1
 EXPOSE 8000
