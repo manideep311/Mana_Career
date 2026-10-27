@@ -46,3 +46,16 @@ async def test_extract_raises_when_no_structured():
 
     with pytest.raises(AppError):
         await ResumeExtractor(_NoStructured(), model="fake").extract("x")
+
+
+def test_the_model_is_told_what_highlights_are():
+    """A real model dropped every bullet line until the schema said what
+    highlights hold; the description is sent with the strict JSON schema."""
+    from app.domain.llm.adapters.openai_compat import to_response_schema
+    from app.domain.resume.extractor import EXTRACTION_SYSTEM_PROMPT, ResumeExtraction
+
+    schema, strict = to_response_schema(ResumeExtraction)
+    assert strict
+    for entry in ("ExtractedExperience", "ExtractedProject"):
+        assert "word for word" in schema["$defs"][entry]["properties"]["highlights"]["description"]
+    assert "highlights, word for word" in EXTRACTION_SYSTEM_PROMPT

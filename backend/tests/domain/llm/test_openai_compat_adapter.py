@@ -179,12 +179,14 @@ def test_free_form_dict_fields_fall_back_to_best_effort_mode():
         assert d["required"] == list(d["properties"])
 
 
-async def test_a_short_429_is_waited_out_once():
-    limited = httpx.Response(429, headers={"retry-after": "2"}, json={"error": {}})
+async def test_a_refilling_per_minute_window_is_waited_out():
+    # Measured on Groq's free plan: after a tailored résumé, the next call was
+    # told to wait 11 s for the tokens-per-minute window.
+    limited = httpx.Response(429, headers={"retry-after": "11"}, json={"error": {}})
     api = FakeAPI(limited, _reply("ok"))
     adapter, slept = _adapter(api)
     out = await adapter.complete([{"role": "user", "content": "hi"}])
-    assert out.text == "ok" and slept == [2.0]
+    assert out.text == "ok" and slept == [11.0]
 
 
 async def test_a_long_429_becomes_a_busy_quota_error():
@@ -197,13 +199,13 @@ async def test_a_long_429_becomes_a_busy_quota_error():
     assert str(caught.value) == "The free AI quota is busy, try again shortly"
 
 
-async def test_repeated_429s_stop_after_one_wait():
+async def test_repeated_429s_stop_after_two_waits():
     limited = httpx.Response(429, headers={"retry-after": "1"}, json={"error": {}})
-    api = FakeAPI(limited, limited)
+    api = FakeAPI(limited, limited, limited)
     adapter, slept = _adapter(api)
     with pytest.raises(AIUnavailableError):
         await adapter.complete([{"role": "user", "content": "hi"}])
-    assert slept == [1.0]
+    assert slept == [1.0, 1.0] and len(api.requests) == 3
 
 
 @pytest.mark.parametrize("status", [500, 502, 503, 504])
@@ -268,3 +270,26 @@ def test_capabilities():
     adapter, _ = _adapter(FakeAPI())
     caps = adapter.capabilities()
     assert caps.structured_output and not caps.tools and not caps.streaming
+
+
+async def test_every_call_logs_its_token_usage(monkeypatch: pytest.MonkeyPatch):
+    from app.domain.llm.adapters import openai_compat
+
+    logged: list[tuple[str, dict[str, Any]]] = []
+
+    class Recorder:
+        def info(self, event: str, **fields: Any) -> None:
+            logged.append((event, fields))
+
+        def __getattr__(self, name: str) -> Any:
+            return lambda *a, **k: None
+
+    monkeypatch.setattr(openai_compat, "log", Recorder())
+    api = FakeAPI(_reply('{"label": "fit", "score": 3, "note": null}', prompt=900, completion=140))
+    adapter, _ = _adapter(api)
+    await adapter.complete([{"role": "user", "content": "rate"}], schema=Verdict, max_tokens=256)
+    _, fields = next(e for e in logged if e[0] == "llm_call")
+    assert fields["schema"] == "Verdict" and fields["model"] == MODEL
+    assert (fields["input_tokens"], fields["output_tokens"]) == (900, 140)
+    assert fields["max_completion_tokens"] == 256 + REASONING_HEADROOM_TOKENS
+    assert "messages" not in fields  # never the prompt itself

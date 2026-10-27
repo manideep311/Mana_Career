@@ -5,6 +5,13 @@ from app.core.config import Settings, get_settings
 from app.models.vector import EMBED_DIM
 
 
+@pytest.fixture(autouse=True)
+def _no_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests set the environment themselves; a developer's backend/.env
+    (with a real LLM_API_KEY, say) must not leak into them."""
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
 def _env(**over: str) -> dict[str, str]:
     base = {
         "DATABASE_URL": "postgresql+asyncpg://u:p@h/db",
