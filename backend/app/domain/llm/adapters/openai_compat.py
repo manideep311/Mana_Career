@@ -302,4 +302,8 @@ class OpenAICompatAdapter:
         )
         if response.status_code in (401, 403):
             return AppError(code="llm.auth_failed")
+        if response.status_code == 413:
+            # One request bigger than the plan's per-minute token allowance:
+            # waiting won't help, so it isn't reported as a busy quota.
+            return AppError(code="llm.request_too_large")
         return AppError(code="llm.bad_request")

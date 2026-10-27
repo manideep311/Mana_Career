@@ -232,6 +232,20 @@ async def test_a_bad_key_is_an_auth_error_not_a_busy_quota():
     assert caught.value.code == "llm.auth_failed"
 
 
+async def test_a_request_over_the_per_minute_token_allowance_is_not_a_busy_quota():
+    too_big = httpx.Response(
+        413,
+        json={"error": {"code": "rate_limit_exceeded", "message": "Request too large for model"}},
+    )
+    api = FakeAPI(too_big)
+    adapter, slept = _adapter(api)
+    with pytest.raises(AppError) as caught:
+        await adapter.complete([{"role": "user", "content": "a very long résumé"}])
+    assert not isinstance(caught.value, AIUnavailableError)
+    assert caught.value.code == "llm.request_too_large"
+    assert slept == [] and len(api.requests) == 1
+
+
 async def test_unknown_models_cost_nothing_rather_than_guessing():
     api = FakeAPI(_reply("ok"))
     adapter = OpenAICompatAdapter(
