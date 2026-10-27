@@ -23,10 +23,16 @@ ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1
 # Dependency layer only — no project, no dev group (cached until pyproject/lock change)
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
+# The local embedding model (EMBEDDINGS_PROVIDER=local, about 67 MB) ships in
+# the image: a cold start reads it from disk, and HF_HUB_OFFLINE below stops
+# any attempt to fetch it at run time.
+ARG LOCAL_EMBED_MODEL=BAAI/bge-small-en-v1.5
+ENV FASTEMBED_CACHE_PATH=/opt/models
+RUN /app/.venv/bin/python -c "import sys; from fastembed import TextEmbedding; TextEmbedding(sys.argv[1])" "$LOCAL_EMBED_MODEL"
 # App source
 COPY . .
-RUN useradd --system --uid 10001 app && mkdir -p /app/var/files && chown -R app /app
+RUN useradd --system --uid 10001 app && mkdir -p /app/var/files && chown -R app /app /opt/models
 USER app
-ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app ENV=prod
+ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app ENV=prod HF_HUB_OFFLINE=1
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
