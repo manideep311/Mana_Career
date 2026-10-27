@@ -141,9 +141,13 @@ class Settings(BaseSettings):
     llm_model_extraction: str = "claude-haiku-4-5-20251001"
     anthropic_model_fallback: str = "claude-sonnet-5"
 
-    # Explicit opt-in for a production deployment that runs without live AI
-    # providers. The UI reads it from /api/v1/meta and says so.
+    # A public demo: labelled in the UI, warns before résumé uploads, and can
+    # only email the applicant's own inbox. Production needs it to run on the
+    # fake providers; with real providers it's a choice, not a requirement.
     demo_mode: bool = False
+    # Delete accounts (and their résumés) this many days after sign-up; 0 keeps
+    # them. Résumés are personal data, so a public demo should set this.
+    demo_retention_days: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -164,6 +168,11 @@ class Settings(BaseSettings):
             if not self.llm_base_url.startswith(("http://", "https://")):
                 raise ValueError("LLM_BASE_URL must start with http:// or https://")
         self._validate_embeddings()
+        if self.demo_mode and self.email_provider == "smtp" and self.email_delivery == "live":
+            raise ValueError(
+                "A demo never emails employers: set EMAIL_DELIVERY=redirect "
+                "(or EMAIL_PROVIDER=console) while DEMO_MODE=true"
+            )
         if self.search_provider == "tavily" and not _has_value(self.search_api_key):
             raise ValueError("SEARCH_API_KEY is required when SEARCH_PROVIDER=tavily")
         if self.file_store == "supabase":

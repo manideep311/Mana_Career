@@ -96,7 +96,7 @@ def _apply(monkeypatch: pytest.MonkeyPatch, **over: str) -> None:
         "LLM_API_KEY", "LLM_BASE_URL", "EMBED_MODEL",
         "EMAIL_PROVIDER", "SMTP_HOST", "SMTP_SECURITY", "EMAIL_FROM_ADDRESS", "EMAIL_DELIVERY",
         "APP_BASE_URL", "FILE_STORE", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
-        "PROXY_SHARED_SECRET",
+        "PROXY_SHARED_SECRET", "DEMO_RETENTION_DAYS", "LLM_DAILY_CALL_LIMIT",
     ):
         monkeypatch.delenv(key, raising=False)
     for key, value in _env(**over).items():
@@ -212,6 +212,25 @@ def test_the_daily_ai_cap_is_off_unless_set(monkeypatch: pytest.MonkeyPatch):
     _apply(monkeypatch, LLM_DAILY_CALL_LIMIT="-1")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_a_demo_never_emails_employers(monkeypatch: pytest.MonkeyPatch):
+    smtp = {
+        "EMAIL_PROVIDER": "smtp", "SMTP_HOST": "smtp-relay.brevo.com",
+        "EMAIL_FROM_ADDRESS": "me@example.com", "DEMO_MODE": "true",
+    }
+    _apply(monkeypatch, **smtp, EMAIL_DELIVERY="live")
+    with pytest.raises(ValidationError, match="EMAIL_DELIVERY=redirect"):
+        Settings()
+    _apply(monkeypatch, **smtp, EMAIL_DELIVERY="redirect")
+    assert Settings().email_delivery == "redirect"
+
+
+def test_demo_retention_is_off_unless_set(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch)
+    assert Settings().demo_retention_days == 0
+    _apply(monkeypatch, DEMO_RETENTION_DAYS="7")
+    assert Settings().demo_retention_days == 7
 
 
 def test_prod_demo_mode_is_an_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):
