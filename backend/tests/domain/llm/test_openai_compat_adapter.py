@@ -268,3 +268,26 @@ def test_capabilities():
     adapter, _ = _adapter(FakeAPI())
     caps = adapter.capabilities()
     assert caps.structured_output and not caps.tools and not caps.streaming
+
+
+async def test_every_call_logs_its_token_usage(monkeypatch: pytest.MonkeyPatch):
+    from app.domain.llm.adapters import openai_compat
+
+    logged: list[tuple[str, dict[str, Any]]] = []
+
+    class Recorder:
+        def info(self, event: str, **fields: Any) -> None:
+            logged.append((event, fields))
+
+        def __getattr__(self, name: str) -> Any:
+            return lambda *a, **k: None
+
+    monkeypatch.setattr(openai_compat, "log", Recorder())
+    api = FakeAPI(_reply('{"label": "fit", "score": 3, "note": null}', prompt=900, completion=140))
+    adapter, _ = _adapter(api)
+    await adapter.complete([{"role": "user", "content": "rate"}], schema=Verdict, max_tokens=256)
+    _, fields = next(e for e in logged if e[0] == "llm_call")
+    assert fields["schema"] == "Verdict" and fields["model"] == MODEL
+    assert (fields["input_tokens"], fields["output_tokens"]) == (900, 140)
+    assert fields["max_completion_tokens"] == 256 + REASONING_HEADROOM_TOKENS
+    assert "messages" not in fields  # never the prompt itself

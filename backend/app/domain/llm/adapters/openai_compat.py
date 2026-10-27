@@ -17,6 +17,7 @@ import asyncio
 import json
 import math
 import re
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
@@ -150,15 +151,44 @@ class OpenAICompatAdapter:
         max_tokens: int = 1024,
         temperature: float = 0.2,
     ) -> LLMResult:
+        started = time.perf_counter()
+        result = await self._complete(
+            messages, schema=schema, max_tokens=max_tokens, temperature=temperature
+        )
+        # One line per call: the numbers the daily cap and token budgets are tuned from.
+        log.info(
+            "llm_call",
+            model=result.model,
+            schema=schema.__name__ if schema is not None else None,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            max_completion_tokens=self._completion_budget(max_tokens),
+            cost_usd=round(result.cost_usd, 6),
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+        return result
+
+    def _completion_budget(self, max_tokens: int) -> int:
+        if self._reasoning_effort == "none":
+            return max_tokens
+        return max_tokens + REASONING_HEADROOM_TOKENS
+
+    async def _complete(
+        self,
+        messages: list[LLMMessage],
+        *,
+        schema: type[BaseModel] | None,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMResult:
         body: dict[str, Any] = {
             "model": self._model,
             "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
             "temperature": temperature,
-            "max_completion_tokens": max_tokens,
+            "max_completion_tokens": self._completion_budget(max_tokens),
         }
         if self._reasoning_effort != "none":
             body["reasoning_effort"] = self._reasoning_effort
-            body["max_completion_tokens"] = max_tokens + REASONING_HEADROOM_TOKENS
         if schema is None:
             data = await self._post(body)
             return self._result(data, strip_reasoning(self._content(data)), None)
