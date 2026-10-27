@@ -52,7 +52,7 @@ async def _seed(db_session, email="mt@x.com"):
         JobChunk(
             job_id=j.id, chunk_index=0, section="description", content="c",
             token_count=1, embed_model="fake-embed-1", embed_dim=EMBED_DIM,
-            embedding=[0.1] * 1024,
+            embedding=[0.1] * EMBED_DIM,
         )
     )
     await db_session.flush()

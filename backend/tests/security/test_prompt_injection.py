@@ -163,7 +163,7 @@ async def test_retrieved_injection_is_a_citation_not_a_command(db_session) -> No
         JobChunk(
             job_id=job.id, owner_id=user.id, chunk_index=0, section="description",
             content=chunk_text, token_count=len(chunk_text.split()),
-            embed_model="fake-embed-1", embed_dim=EMBED_DIM, embedding=[0.1] * 1024,
+            embed_model="fake-embed-1", embed_dim=EMBED_DIM, embedding=[0.1] * EMBED_DIM,
         )
     )
     await db_session.flush()

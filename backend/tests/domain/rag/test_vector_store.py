@@ -21,13 +21,13 @@ async def _seed(db_session):
         JobChunk(job_id=job.id, owner_id=None, chunk_index=0, section="description",
                  content="We need a senior Python engineer with Kafka and Postgres.",
                  token_count=10, embed_model="fake-embed-1", embed_dim=EMBED_DIM,
-                 embedding=[0.1] * 1024),
+                 embedding=[0.1] * EMBED_DIM),
         # A genuinely different direction, not a scalar multiple of chunk 0, so the
         # cosine-distance ordering is unambiguous (both-are-all-ones would tie at 0).
         JobChunk(job_id=job.id, owner_id=None, chunk_index=1, section="responsibilities",
                  content="Own the streaming ingestion pipeline and its SLAs.",
                  token_count=9, embed_model="fake-embed-1", embed_dim=EMBED_DIM,
-                 embedding=[0.1] * 512 + [0.9] * 512),
+                 embedding=[0.1] * (EMBED_DIM // 2) + [0.9] * (EMBED_DIM - EMBED_DIM // 2)),
     ])
     await db_session.flush()
     return u, job
@@ -36,7 +36,7 @@ async def _seed(db_session):
 async def test_vector_search_returns_ranked_chunks(db_session):
     u, job = await _seed(db_session)
     rows = await VectorStore(db_session).vector_search(
-        source=RetrievalSource.JOB_CHUNKS, query_embedding=[0.1] * 1024, user_id=u.id,
+        source=RetrievalSource.JOB_CHUNKS, query_embedding=[0.1] * EMBED_DIM, user_id=u.id,
     )
     assert len(rows) == 2
     assert rows[0].vector_rank == 1 and rows[1].vector_rank == 2
@@ -66,7 +66,7 @@ async def test_job_id_filter_scopes_to_one_job(db_session):
     u, _job = await _seed(db_session)
     other = uuid.uuid4()
     rows = await VectorStore(db_session).vector_search(
-        source=RetrievalSource.JOB_CHUNKS, query_embedding=[0.1] * 1024,
+        source=RetrievalSource.JOB_CHUNKS, query_embedding=[0.1] * EMBED_DIM,
         user_id=u.id, job_id=other,
     )
     assert rows == []
@@ -75,5 +75,5 @@ async def test_job_id_filter_scopes_to_one_job(db_session):
 async def test_unknown_source_raises(db_session):
     with pytest.raises(NotImplementedError):
         await VectorStore(db_session).vector_search(
-            source="resume_chunks", query_embedding=[0.0] * 1024, user_id=uuid.uuid4(),  # type: ignore[arg-type]
+            source="resume_chunks", query_embedding=[0.0] * EMBED_DIM, user_id=uuid.uuid4(),  # type: ignore[arg-type]
         )
