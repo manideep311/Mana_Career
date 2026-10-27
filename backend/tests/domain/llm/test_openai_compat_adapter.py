@@ -179,12 +179,14 @@ def test_free_form_dict_fields_fall_back_to_best_effort_mode():
         assert d["required"] == list(d["properties"])
 
 
-async def test_a_short_429_is_waited_out_once():
-    limited = httpx.Response(429, headers={"retry-after": "2"}, json={"error": {}})
+async def test_a_refilling_per_minute_window_is_waited_out():
+    # Measured on Groq's free plan: after a tailored résumé, the next call was
+    # told to wait 11 s for the tokens-per-minute window.
+    limited = httpx.Response(429, headers={"retry-after": "11"}, json={"error": {}})
     api = FakeAPI(limited, _reply("ok"))
     adapter, slept = _adapter(api)
     out = await adapter.complete([{"role": "user", "content": "hi"}])
-    assert out.text == "ok" and slept == [2.0]
+    assert out.text == "ok" and slept == [11.0]
 
 
 async def test_a_long_429_becomes_a_busy_quota_error():
@@ -197,13 +199,13 @@ async def test_a_long_429_becomes_a_busy_quota_error():
     assert str(caught.value) == "The free AI quota is busy, try again shortly"
 
 
-async def test_repeated_429s_stop_after_one_wait():
+async def test_repeated_429s_stop_after_two_waits():
     limited = httpx.Response(429, headers={"retry-after": "1"}, json={"error": {}})
-    api = FakeAPI(limited, limited)
+    api = FakeAPI(limited, limited, limited)
     adapter, slept = _adapter(api)
     with pytest.raises(AIUnavailableError):
         await adapter.complete([{"role": "user", "content": "hi"}])
-    assert slept == [1.0]
+    assert slept == [1.0, 1.0] and len(api.requests) == 3
 
 
 @pytest.mark.parametrize("status", [500, 502, 503, 504])

@@ -45,8 +45,13 @@ _PRICE_PER_MTOK: dict[str, tuple[float, float]] = {
 # much is added on top of the caller's ``max_tokens`` so the answer itself
 # isn't cut short.
 REASONING_HEADROOM_TOKENS = 1024
-# A 429 that asks for at most this long is waited out once, in place.
-MAX_INLINE_WAIT_SECONDS = 10.0
+# A 429 that asks for at most this long is waited out in place, up to
+# MAX_RATE_LIMIT_WAITS times per call. Model calls run in background jobs, and
+# on Groq's free plan a 429 mostly means the 8,000 tokens-per-minute window is
+# refilling: measured, one tailored résumé (three calls, ~7,500 tokens) used
+# it up, and the next call was asked to wait 10-11 s.
+MAX_INLINE_WAIT_SECONDS = 30.0
+MAX_RATE_LIMIT_WAITS = 2
 _SERVER_ERRORS = {500, 502, 503, 504}
 _THINK_RE = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
 _FENCE_RE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -273,8 +278,9 @@ class OpenAICompatAdapter:
         )
 
     async def _post(self, body: dict[str, Any]) -> dict[str, Any]:
-        """One call, with a single in-place retry for a short 429 or a 5xx."""
-        for attempt in range(2):
+        """One call; waits out short 429s (see MAX_RATE_LIMIT_WAITS) and retries a 5xx once."""
+        waits = 0
+        for attempt in range(MAX_RATE_LIMIT_WAITS + 1):
             try:
                 async with httpx.AsyncClient(
                     base_url=self._base_url, headers=self._headers,
@@ -292,7 +298,12 @@ class OpenAICompatAdapter:
             if status == 429:
                 wait = _retry_after(response)
                 log.warning("llm_rate_limited", retry_after=wait, attempt=attempt + 1)
-                if attempt == 0 and wait is not None and wait <= MAX_INLINE_WAIT_SECONDS:
+                if (
+                    waits < MAX_RATE_LIMIT_WAITS
+                    and wait is not None
+                    and wait <= MAX_INLINE_WAIT_SECONDS
+                ):
+                    waits += 1
                     await self._sleep(wait)
                     continue
                 raise AIUnavailableError(
