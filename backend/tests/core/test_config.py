@@ -2,6 +2,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings, get_settings
+from app.models.vector import EMBED_DIM
 
 
 def _env(**over: str) -> dict[str, str]:
@@ -16,11 +17,11 @@ def _env(**over: str) -> dict[str, str]:
 
 
 def test_loads_from_env(monkeypatch: pytest.MonkeyPatch):
-    for k, v in _env(ENV="dev", EMBED_DIM="1024").items():
+    for k, v in _env(ENV="dev").items():
         monkeypatch.setenv(k, v)
     s = Settings()
     assert s.env == "dev"
-    assert s.embed_dim == 1024
+    assert s.embed_dim == EMBED_DIM
     assert s.llm_provider == "fake"
 
 

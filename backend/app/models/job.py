@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+from app.models.vector import EMBED_DIM
 
 # A STORED generated column's expression must be IMMUTABLE. `to_tsvector` with a
 # literal config name qualifies, but `array_to_string()` is only STABLE — so
@@ -156,8 +157,7 @@ class JobChunk(Base, TimestampMixin):
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
     embed_model: Mapped[str] = mapped_column(String(60), nullable=False)
     embed_dim: Mapped[int] = mapped_column(Integer, nullable=False)
-    # The literal dim must stay in sync with app/core/config.py `embed_dim` and the migration.
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM))
     chunk_tsv: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )

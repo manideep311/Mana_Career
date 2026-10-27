@@ -8,6 +8,8 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.models.vector import EMBED_DIM
+
 # Values that must never sign a JWT in any environment: the development sentinel
 # that shipped in `.env.example`, and the placeholders people paste from docs.
 _PLACEHOLDER_SECRETS = frozenset(
@@ -81,7 +83,8 @@ class Settings(BaseSettings):
     embeddings_provider: Literal["fake", "voyage"] = "fake"
     embed_model: str = "fake-embed-1"
     voyage_api_key: SecretStr | None = None
-    embed_dim: int = 1024
+    # The same EMBED_DIM the vector columns are built with (app/models/vector.py).
+    embed_dim: int = EMBED_DIM
 
     # "none" disables web research; the agent reports the step as skipped.
     search_provider: Literal["none", "fake", "tavily"] = "none"

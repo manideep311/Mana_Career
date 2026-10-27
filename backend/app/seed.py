@@ -25,6 +25,16 @@ _PREFERRED_WEIGHT = 0.4
 _JOB_CONFLICT_SKIP = {"source_ref", "is_seed", "user_id"}
 
 
+def skill_embed_text(label: str, aliases: list[str]) -> str:
+    """What a skill's vector is computed from (also used by ``app.reembed``)."""
+    return f"{label}: {', '.join(aliases)}" if aliases else label
+
+
+def learning_embed_text(title: str, summary: str, skills: list[str]) -> str:
+    """What a learning resource's vector is computed from."""
+    return f"{title}. {summary} Skills: {', '.join(skills)}"
+
+
 async def load_taxonomy() -> list[dict[str, Any]]:
     """Load and return the skill taxonomy from JSON file."""
     path = Path(__file__).parent / "domain" / "skills" / "taxonomy.json"
@@ -50,17 +60,15 @@ async def seed_skills(session: AsyncSession | None = None) -> int:
     provider = get_embeddings_provider(settings)
 
     async def _run(s: AsyncSession) -> None:
-        for entry in entries:
+        # Stored rows are documents (the normalizer embeds the lookups as queries).
+        vectors = await provider.embed_documents(
+            [skill_embed_text(e["label"], e["aliases"]) for e in entries]
+        )
+        for entry, vec in zip(entries, vectors, strict=True):
             slug = entry["slug"]
             label = entry["label"]
             category = entry["category"]
             aliases = entry["aliases"]
-
-            # Create text for embedding
-            text = f"{label}: {', '.join(aliases)}" if aliases else label
-
-            # Generate embedding
-            vec = await provider.embed_query(text)
 
             # Upsert with conflict resolution
             stmt = (
@@ -289,7 +297,7 @@ async def load_learning_resources() -> list[dict[str, Any]]:
 async def seed_learning_resources(session: AsyncSession | None = None) -> int:
     """Seed ``learning_resources`` from the hand-authored catalog.
 
-    Upserts on ``url``; embeds ``"{title}. {summary} Skills: {slugs}"``. Same
+    Upserts on ``url``; embeds :func:`learning_embed_text`. Same
     ``session=None`` dual-path shape as :func:`seed_skills`.
     """
     from app.models.learning import LearningResource
@@ -299,10 +307,14 @@ async def seed_learning_resources(session: AsyncSession | None = None) -> int:
     provider = get_embeddings_provider(settings)
 
     async def _run(s: AsyncSession) -> None:
-        for e in entries:
+        vectors = await provider.embed_documents(
+            [
+                learning_embed_text(e["title"], e["summary"], list(e.get("skills", [])))
+                for e in entries
+            ]
+        )
+        for e, vec in zip(entries, vectors, strict=True):
             skills = list(e.get("skills", []))
-            embed_text = f"{e['title']}. {e['summary']} Skills: {', '.join(skills)}"
-            vec = await provider.embed_query(embed_text)
             stmt = (
                 insert(LearningResource)
                 .values(

@@ -5,6 +5,7 @@ from app.domain.rag.service import RagService
 from app.domain.rag.types import RetrievalSource
 from app.models.job import Job, JobChunk
 from app.models.user import User
+from app.models.vector import EMBED_DIM
 
 
 async def _seed(db_session):
@@ -15,7 +16,7 @@ async def _seed(db_session):
               raw_text="x" * 60, title="Staff ML Engineer")
     db_session.add(job)
     await db_session.flush()
-    emb = FakeEmbeddingsProvider(1024, "fake-embed-1")
+    emb = FakeEmbeddingsProvider(EMBED_DIM, "fake-embed-1")
     contents = [
         "Design and ship large language model inference systems at scale.",
         "Mentor engineers and set the technical direction for the ML platform.",
@@ -27,7 +28,7 @@ async def _seed(db_session):
         db_session.add(JobChunk(
             job_id=job.id, owner_id=None, chunk_index=i, section="description",
             content=c, token_count=len(c.split()), embed_model="fake-embed-1",
-            embed_dim=1024, embedding=v,
+            embed_dim=EMBED_DIM, embedding=v,
         ))
     await db_session.flush()
     return u, job
@@ -35,7 +36,7 @@ async def _seed(db_session):
 
 async def test_retrieve_returns_fenced_context_with_citations(db_session):
     u, job = await _seed(db_session)
-    svc = RagService(db_session, FakeEmbeddingsProvider(1024, "fake-embed-1"))
+    svc = RagService(db_session, FakeEmbeddingsProvider(EMBED_DIM, "fake-embed-1"))
     ctx = await svc.retrieve(
         "machine learning platform inference and evaluation",
         source=RetrievalSource.JOB_CHUNKS, user_id=u.id, job_id=job.id, k=3,
@@ -49,14 +50,14 @@ async def test_retrieve_returns_fenced_context_with_citations(db_session):
 
 async def test_retrieve_blank_query_is_empty(db_session):
     u, _job = await _seed(db_session)
-    svc = RagService(db_session, FakeEmbeddingsProvider(1024, "fake-embed-1"))
+    svc = RagService(db_session, FakeEmbeddingsProvider(EMBED_DIM, "fake-embed-1"))
     ctx = await svc.retrieve("  ", source=RetrievalSource.JOB_CHUNKS, user_id=u.id)
     assert ctx.blocks == () and ctx.text == ""
 
 
 async def test_retrieve_no_matches_is_empty(db_session):
     u, _job = await _seed(db_session)
-    svc = RagService(db_session, FakeEmbeddingsProvider(1024, "fake-embed-1"))
+    svc = RagService(db_session, FakeEmbeddingsProvider(EMBED_DIM, "fake-embed-1"))
     ctx = await svc.retrieve(
         "anything", source=RetrievalSource.JOB_CHUNKS, user_id=u.id, job_id=uuid.uuid4(),
     )

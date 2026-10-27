@@ -4,6 +4,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from app.models.learning import LearningResource
+from app.models.vector import EMBED_DIM
 from app.seed import seed_learning_resources
 
 
@@ -19,4 +20,4 @@ async def test_seed_learning_resources_is_idempotent(db_session):
     ).scalar_one()
     assert count1 == count2 == n1 == n2
     row = (await db_session.execute(select(LearningResource).limit(1))).scalar_one()
-    assert row.embedding is not None and len(row.embedding) == 1024
+    assert row.embedding is not None and len(row.embedding) == EMBED_DIM
