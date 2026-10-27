@@ -75,13 +75,15 @@ def test_resume_and_filestore_defaults(monkeypatch: pytest.MonkeyPatch):
     assert s.llm_model_extraction == "claude-haiku-4-5-20251001"
     assert s.upload_limit_per_hour == 20
 
+# The documented free stack: Groq for the model, embeddings on the CPU.
 _PROD_OK = {
     "ENV": "prod",
     "JWT_SECRET": "p" * 40,
-    "LLM_PROVIDER": "anthropic",
-    "ANTHROPIC_API_KEY": "test-anthropic-key",
-    "EMBEDDINGS_PROVIDER": "voyage",
-    "VOYAGE_API_KEY": "test-voyage-key",
+    "LLM_PROVIDER": "openai_compat",
+    "LLM_API_KEY": "test-groq-key",
+    "EMBEDDINGS_PROVIDER": "local",
+    "EMBED_MODEL": "BAAI/bge-small-en-v1.5",
+    "EMBED_DIM": "384",
     "SEARCH_PROVIDER": "none",
     "REFRESH_COOKIE_SECURE": "true",
     "CORS_ORIGINS": "https://career.example",
@@ -91,6 +93,7 @@ _PROD_OK = {
 def _apply(monkeypatch: pytest.MonkeyPatch, **over: str) -> None:
     for key in (
         "SEARCH_PROVIDER", "DEMO_MODE", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY",
+        "LLM_API_KEY", "LLM_BASE_URL", "EMBED_MODEL",
         "EMAIL_PROVIDER", "SMTP_HOST", "SMTP_SECURITY", "EMAIL_FROM_ADDRESS", "EMAIL_DELIVERY",
         "APP_BASE_URL", "FILE_STORE", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
         "PROXY_SHARED_SECRET",
@@ -147,6 +150,70 @@ def test_prod_rejects_fake_providers_without_demo_mode(monkeypatch: pytest.Monke
     assert "LLM_PROVIDER" in str(exc.value) and "EMBEDDINGS_PROVIDER" in str(exc.value)
 
 
+def test_prod_with_real_providers_needs_no_demo_mode(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, **{**_PROD_OK, "DEMO_MODE": "false"})
+    s = Settings()
+    assert (s.llm_provider, s.embeddings_provider) == ("openai_compat", "local")
+    assert s.llm_base_url == "https://api.groq.com/openai/v1" and not s.demo_mode
+
+
+def test_prod_still_accepts_anthropic_and_voyage(monkeypatch: pytest.MonkeyPatch):
+    _apply(
+        monkeypatch,
+        **{
+            **_PROD_OK, "LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "test-anthropic-key",
+            "EMBEDDINGS_PROVIDER": "voyage", "VOYAGE_API_KEY": "test-voyage-key",
+            "EMBED_MODEL": "voyage-3", "EMBED_DIM": "1024",
+        },
+    )
+    assert Settings().embed_dim == 1024
+
+
+def test_voyage_needs_1024_dimensions(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, EMBEDDINGS_PROVIDER="voyage", VOYAGE_API_KEY="k", EMBED_DIM="384")
+    with pytest.raises(ValidationError, match="EMBED_DIM=1024"):
+        Settings()
+
+
+@pytest.mark.parametrize(
+    ("model", "dim", "message"),
+    [
+        ("BAAI/bge-small-en-v1.5", "1024", "EMBED_DIM=384"),
+        ("BAAI/bge-large-en-v1.5", "1024", "EMBED_MODEL must be one of"),
+    ],
+)
+def test_local_embeddings_need_a_known_model_and_its_size(
+    monkeypatch: pytest.MonkeyPatch, model: str, dim: str, message: str
+):
+    _apply(monkeypatch, EMBEDDINGS_PROVIDER="local", EMBED_MODEL=model, EMBED_DIM=dim)
+    with pytest.raises(ValidationError, match=message):
+        Settings()
+
+
+def test_openai_compatible_base_url_rules(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch, LLM_PROVIDER="openai_compat", LLM_API_KEY="k", LLM_BASE_URL="ftp://x")
+    with pytest.raises(ValidationError, match="LLM_BASE_URL"):
+        Settings()
+    # A local server is fine while developing...
+    _apply(
+        monkeypatch, LLM_PROVIDER="openai_compat", LLM_API_KEY="ollama",
+        LLM_BASE_URL="http://localhost:11434/v1",
+    )
+    assert Settings().llm_base_url == "http://localhost:11434/v1"
+    # ...but production only talks to a model over TLS.
+    _apply(monkeypatch, **{**_PROD_OK, "LLM_BASE_URL": "http://models.example/v1"})
+    with pytest.raises(ValidationError, match="https"):
+        Settings()
+
+
+def test_the_daily_ai_cap_is_off_unless_set(monkeypatch: pytest.MonkeyPatch):
+    _apply(monkeypatch)
+    assert Settings().llm_daily_call_limit == 0
+    _apply(monkeypatch, LLM_DAILY_CALL_LIMIT="-1")
+    with pytest.raises(ValidationError):
+        Settings()
+
+
 def test_prod_demo_mode_is_an_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):
     _apply(
         monkeypatch,
@@ -167,7 +234,7 @@ def test_prod_does_not_require_web_search(monkeypatch: pytest.MonkeyPatch):
         ("LLM_PROVIDER", "openai"),
         ("LLM_PROVIDER", "gemini"),
         ("EMBEDDINGS_PROVIDER", "openai"),
-        ("EMBEDDINGS_PROVIDER", "local"),
+        ("EMBEDDINGS_PROVIDER", "ollama"),
         ("SEARCH_PROVIDER", "brave"),
         ("FILE_STORE", "s3"),
         ("EMAIL_PROVIDER", "sendgrid"),
@@ -186,6 +253,7 @@ def test_unimplemented_providers_fail_at_startup(
     ("provider", "key_var"),
     [
         ("LLM_PROVIDER=anthropic", "ANTHROPIC_API_KEY"),
+        ("LLM_PROVIDER=openai_compat", "LLM_API_KEY"),
         ("EMBEDDINGS_PROVIDER=voyage", "VOYAGE_API_KEY"),
     ],
 )

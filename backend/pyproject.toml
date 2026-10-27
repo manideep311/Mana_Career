@@ -29,6 +29,7 @@ dependencies = [
   "python-docx>=1.1.2",
   "xhtml2pdf>=0.2.21",
   "pypdfium2>=4.30",
+  "fastembed>=0.9.1",
 ]
 
 [dependency-groups]
