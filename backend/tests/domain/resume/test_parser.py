@@ -102,3 +102,31 @@ async def test_get_resume_parser_honours_setting():
 
 def test_default_resume_parser_is_pdfium():
     assert Settings.model_fields["resume_parser"].default == "pdfium"
+
+
+async def test_pdfium_parses_take_turns(monkeypatch):
+    """PDFium isn't thread-safe: concurrent uploads once crashed the process
+    (SIGSEGV), so parses in worker threads must never overlap."""
+    import asyncio
+    import threading
+    import time
+
+    from app.domain.resume.parser import ParsedResume, Pdfium2ResumeParser
+
+    inside, peak = 0, 0
+    guard = threading.Lock()
+
+    def probe(data: bytes) -> ParsedResume:
+        nonlocal inside, peak
+        with guard:
+            inside += 1
+            peak = max(peak, inside)
+        time.sleep(0.05)
+        with guard:
+            inside -= 1
+        return ParsedResume(text="x" * 500, page_count=1)
+
+    monkeypatch.setattr(Pdfium2ResumeParser, "_read", staticmethod(probe))
+    parser = Pdfium2ResumeParser()
+    results = await asyncio.gather(*(parser.parse(b"%PDF") for _ in range(5)))
+    assert len(results) == 5 and peak == 1
