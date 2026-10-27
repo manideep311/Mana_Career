@@ -63,11 +63,13 @@ def test_the_model_and_size_must_match():
 
 
 def test_the_model_is_loaded_once_per_process(monkeypatch: pytest.MonkeyPatch):
-    loads: list[str] = []
+    loads: list[tuple[str, bool]] = []
 
     class Loader:
-        def __init__(self, model_name: str, cache_dir: str | None = None) -> None:
-            loads.append(model_name)
+        def __init__(
+            self, model_name: str, cache_dir: str | None = None, *, enable_cpu_mem_arena: bool
+        ) -> None:
+            loads.append((model_name, enable_cpu_mem_arena))
 
     import fastembed
 
@@ -75,7 +77,8 @@ def test_the_model_is_loaded_once_per_process(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(local, "_models", {})
     first = local.load_model(MODEL, "/models")
     assert local.load_model(MODEL, "/models") is first
-    assert loads == [MODEL]
+    # ...without ONNX Runtime's memory arena, which would hold its high-water mark.
+    assert loads == [(MODEL, False)]
 
 
 def test_the_factory_builds_it(monkeypatch: pytest.MonkeyPatch):
@@ -87,3 +90,28 @@ def test_the_factory_builds_it(monkeypatch: pytest.MonkeyPatch):
     p = get_embeddings_provider(Settings(_env_file=None))  # type: ignore[call-arg]
     assert isinstance(p, LocalEmbeddingsProvider)
     assert (p.model, p.dim, p._cache_dir) == (MODEL, 384, "/models")
+
+
+async def test_one_inference_at_a_time(monkeypatch: pytest.MonkeyPatch):
+    import asyncio
+    import threading
+    import time
+
+    inside, peak = 0, 0
+    guard = threading.Lock()
+
+    class Slow(StubModel):
+        def embed(self, texts, batch_size=256):
+            nonlocal inside, peak
+            with guard:
+                inside += 1
+                peak = max(peak, inside)
+            time.sleep(0.03)
+            with guard:
+                inside -= 1
+            return super().embed(texts, batch_size)
+
+    monkeypatch.setattr(local, "load_model", lambda name, cache_dir=None: Slow())
+    p = LocalEmbeddingsProvider(model=MODEL, dim=384)
+    await asyncio.gather(*(p.embed_query(f"q{i}") for i in range(4)))
+    assert peak == 1

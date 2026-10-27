@@ -25,6 +25,9 @@ BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages
 
 _models: dict[tuple[str, str | None], TextEmbedding] = {}
 _lock = threading.Lock()
+# One inference at a time: each takes milliseconds, and running them in
+# parallel only multiplies the working memory on a 512 MB host.
+_inference = threading.Lock()
 
 
 def load_model(model: str, cache_dir: str | None = None) -> TextEmbedding:
@@ -35,12 +38,21 @@ def load_model(model: str, cache_dir: str | None = None) -> TextEmbedding:
             # Imported lazily: onnxruntime is heavy, and only this provider needs it.
             from fastembed import TextEmbedding
 
-            _models[key] = TextEmbedding(model_name=model, cache_dir=cache_dir)
+            # Without ONNX Runtime's memory arena, buffers are returned after
+            # each call instead of being kept at their high-water mark.
+            _models[key] = TextEmbedding(
+                model_name=model, cache_dir=cache_dir, enable_cpu_mem_arena=False
+            )
         return _models[key]
 
 
 class LocalEmbeddingsProvider:
-    _BATCH = 32
+    # One text per inference. Measured in the production image (512-token
+    # texts, no memory arena): the loaded model takes ~185 MiB and single texts
+    # add nothing visible, while batches of 4 peak ~115 MiB higher, because a
+    # batch is padded to its longest text and attention grows with its square.
+    # On a 512 MB host that headroom matters more than throughput.
+    _BATCH = 1
 
     def __init__(self, *, model: str, dim: int, cache_dir: str | None = None) -> None:
         if LOCAL_EMBED_MODELS.get(model) != dim:
@@ -67,7 +79,8 @@ class LocalEmbeddingsProvider:
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         model = load_model(self._model, self._cache_dir)
-        vectors = [v.tolist() for v in model.embed(texts, batch_size=self._BATCH)]
+        with _inference:
+            vectors = [v.tolist() for v in model.embed(texts, batch_size=self._BATCH)]
         if any(len(v) != self._dim for v in vectors):
             raise RuntimeError("local embeddings returned a vector of the wrong dimension")
         return vectors
