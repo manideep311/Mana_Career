@@ -66,14 +66,15 @@ machine codes. Module boundaries are enforced by `import-linter`.
 
 ### Retrieval (RAG)
 
-Job descriptions are split into sections and chunked; each chunk is stored with a
-1024-dimension embedding (Voyage) **and** a Postgres full-text vector. Retrieval runs
+Job descriptions are split into sections and chunked; each chunk is stored with an
+embedding (384-d from `bge-small-en-v1.5` on the CPU by default, or 1024-d from Voyage)
+**and** a Postgres full-text vector. Retrieval runs
 both searches and fuses them, so exact terms ("Kubernetes", "SOC 2") and meaning
 ("container orchestration") both count.
 
 ```mermaid
 flowchart LR
-    Q[Query] --> EMB["Embed query<br/>(Voyage, 1024-d)"]
+    Q[Query] --> EMB["Embed query<br/>(bge-small, 384-d)"]
     Q --> FTS["Full-text search<br/>websearch_to_tsquery + ts_rank_cd"]
     EMB --> VEC["Vector search<br/>pgvector HNSW, cosine"]
     VEC --> RRF["Reciprocal Rank Fusion<br/>(k = 60)"]
@@ -81,7 +82,7 @@ flowchart LR
     RRF --> RR[Reranker hook]
     RR --> MMR["MMR: relevant but<br/>not repetitive, top-k"]
     MMR --> CTX["Context assembly<br/>token budget, citations,<br/>untrusted-data fences"]
-    CTX --> LLM["LLM (Claude)"]
+    CTX --> LLM["LLM (Groq gpt-oss)"]
 ```
 
 - **Hybrid search + fusion:** `app/domain/rag/` — `VectorStore` (HNSW `vector_cosine_ops`
@@ -153,20 +154,26 @@ that CI's `eval` job runs on every push:
 
 ### Demo mode
 
-Without API keys the app uses deterministic fake providers, so the whole stack runs
-offline and the free deployment (`docs/deploy.md`) costs nothing. The site says so in a
-banner. In that mode the vector half of retrieval has no real meaning (the full-text half
-still works), letters and tailored résumés are simple templates, and résumé skills come
-from matching the text against the skills catalogue. Set `LLM_PROVIDER=anthropic` and
-`EMBEDDINGS_PROVIDER=voyage` with keys to see the real model behaviour.
+The free deployment (`docs/deploy.md`) runs real AI at no cost: Groq's free plan for
+the language model and `bge-small-en-v1.5` embeddings on the server's CPU. A global
+daily cap (`LLM_DAILY_CALL_LIMIT`) keeps it inside the free quota; past it the AI
+features pause and say so while matching, career paths and skill plans keep working.
+It runs as a labelled public demo: résumé uploads carry a privacy warning, application
+emails only reach the applicant's own inbox, and accounts are deleted after a week.
+
+Offline development and CI use deterministic fake providers instead. In that mode the
+vector half of retrieval has no real meaning (the full-text half still works), letters
+and tailored résumés are simple templates, and résumé skills come from matching the text
+against the skills catalogue.
 
 ## Stack
 
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind, shadcn/ui, Lucide, TanStack Query
 - **Backend:** Python 3.12, FastAPI, ARQ worker, SQLAlchemy 2.0 (async) + Alembic
-- **AI:** LangGraph agent, hybrid RAG on pgvector, provider seams: Anthropic Claude (LLM),
-  Voyage (embeddings), Tavily (optional web search), plus deterministic fakes for offline
-  runs and the free demo
+- **AI:** LangGraph agent, hybrid RAG on pgvector, provider seams: any OpenAI-compatible
+  LLM API (Groq's free plan by default) or Anthropic Claude; embeddings from
+  `bge-small-en-v1.5` on the CPU (fastembed/ONNX) or Voyage; Tavily (optional web
+  search); plus deterministic fakes for offline runs and CI
 - **Data:** PostgreSQL 16 + pgvector, Redis 7
 - **Infra:** Docker / docker-compose · GitHub Actions CI
 

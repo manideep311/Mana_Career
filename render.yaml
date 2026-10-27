@@ -5,6 +5,7 @@
 #              plus a free Key Value (Redis) instance for the job queue.
 #   Supabase : Postgres (with pgvector) and a private Storage bucket for résumés.
 #   Vercel   : the website; it forwards /api to this service.
+#   Groq     : the language model (free plan); embeddings run on Render's CPU.
 #
 # Step-by-step setup: docs/deploy.md. Values marked `sync: false` are secrets or
 # per-deployment addresses that Render asks for when the Blueprint is applied;
@@ -82,21 +83,41 @@ services:
       - key: SUPABASE_STORAGE_BUCKET
         value: resumes
 
-      # --- AI: free demo mode ---------------------------------------------
-      # No AI keys needed: the site says plainly that it's a demo, résumé
-      # skills are found by matching the skills catalogue (experience is added
-      # on the Profile page), and written drafts use simple templates.
-      # Real AI later: docs/deploy.md, "Turning on real AI".
+      # --- AI, free -------------------------------------------------------
+      # The model: Groq's free plan through its OpenAI-compatible API (a key
+      # from console.groq.com, typed in when Render asks; no card needed).
       - key: LLM_PROVIDER
-        value: fake
+        value: openai_compat
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: LLM_API_KEY
+        sync: false
+      # Model calls per UTC day across all visitors, kept under Groq's free
+      # daily token allowance. Past it the AI features pause until tomorrow;
+      # matching, career paths and skill plans keep working.
+      - key: LLM_DAILY_CALL_LIMIT
+        value: "60"
+      # AI requests per visitor per hour, so one visitor can't spend the day.
+      - key: LLM_LIMIT_PER_HOUR
+        value: "10"
+      # Embeddings on the API's own CPU: BAAI/bge-small-en-v1.5 ships in the
+      # image (no key, no quota).
       - key: EMBEDDINGS_PROVIDER
-        value: fake
+        value: local
       - key: EMBED_MODEL
-        value: fake-embed-1
-      - key: DEMO_MODE
-        value: "true"
+        value: BAAI/bge-small-en-v1.5
+      - key: EMBED_DIM
+        value: "384"
       - key: SEARCH_PROVIDER
         value: none
+      # A public demo: labelled as one, warns before résumé uploads, can only
+      # email the applicant's own inbox, and deletes accounts after a week.
+      - key: DEMO_MODE
+        value: "true"
+      - key: DEMO_RETENTION_DAYS
+        value: "7"
       # Load the career catalogue on the first start (skipped once it exists).
       - key: SEED_ON_START
         value: "true"
