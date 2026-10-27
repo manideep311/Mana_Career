@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+from app.models.vector import EMBED_DIM
 
 
 class Skill(Base, TimestampMixin):
@@ -46,9 +47,7 @@ class Skill(Base, TimestampMixin):
     aliases: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=text("'{}'")
     )
-    # The literal dim must stay in sync with app/core/config.py `embed_dim`
-    # (default 1024) and the migration's Vector(1024).
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM))
 
 
 class ProfileSkill(Base, TimestampMixin):

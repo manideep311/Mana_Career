@@ -8,6 +8,10 @@ Three things live outside that cascade and are handled here:
 - audit log rows, which are kept as the security record but lose the IP,
   browser and before/after snapshots.
 
+A person deletes their own account with their password (``delete``); a public
+demo can also expire accounts after ``DEMO_RETENTION_DAYS`` (``expire``, run
+by the worker's retention job).
+
 ``delete`` does all database work inside the caller's transaction and returns
 a ``CleanupPlan``; the caller commits, then runs ``cleanup`` so no file or
 checkpoint is removed for an account that turned out not to be deleted.
@@ -76,6 +80,13 @@ class AccountDeleter:
         if not verify_password(user.password_hash, password):
             # 403, not 401: a typo must not look like an expired session.
             raise ForbiddenError(detail="That password isn't right.", code="invalid_password")
+        return await self._remove(user, actor_type="user", action="account.deleted")
+
+    async def expire(self, user: User) -> CleanupPlan:
+        """Remove an account whose retention period is over (not committed)."""
+        return await self._remove(user, actor_type="system", action="account.expired")
+
+    async def _remove(self, user: User, *, actor_type: str, action: str) -> CleanupPlan:
         uid = user.id
         file_refs = tuple(
             r for (r,) in (
@@ -91,7 +102,7 @@ class AccountDeleter:
         )
         # The record that an account was deleted, with nothing personal in it.
         await audit(
-            self._s, actor_type="user", action="account.deleted", actor_user_id=uid,
+            self._s, actor_type=actor_type, action=action, actor_user_id=uid,
             resource_type="user", resource_id=uid,
             meta={"resumes": len(file_refs), "agent_runs": len(run_ids)},
         )

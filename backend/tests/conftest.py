@@ -20,7 +20,7 @@ os.environ.setdefault("JWT_SECRET", "test-only-jwt-secret-for-the-pytest-suite")
 os.environ.setdefault("REFRESH_COOKIE_SECURE", "false")
 os.environ.setdefault("LLM_PROVIDER", "fake")
 os.environ.setdefault("EMBEDDINGS_PROVIDER", "fake")
-os.environ.setdefault("EMBED_DIM", "1024")
+os.environ.setdefault("EMBED_DIM", "384")
 # Agent tests exercise research against the deterministic fake search.
 os.environ.setdefault("SEARCH_PROVIDER", "fake")
 

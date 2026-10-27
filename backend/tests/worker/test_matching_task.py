@@ -51,8 +51,8 @@ async def _seed(db_session, email="mt@x.com"):
     db_session.add(
         JobChunk(
             job_id=j.id, chunk_index=0, section="description", content="c",
-            token_count=1, embed_model="fake-embed-1", embed_dim=1024,
-            embedding=[0.1] * 1024,
+            token_count=1, embed_model="fake-embed-1", embed_dim=EMBED_DIM,
+            embedding=[0.1] * EMBED_DIM,
         )
     )
     await db_session.flush()
@@ -109,6 +109,7 @@ import pytest  # noqa: E402
 from arq.worker import Retry  # noqa: E402
 
 from app.models.match import JobMatch  # noqa: E402
+from app.models.vector import EMBED_DIM  # noqa: E402
 from app.worker.retry import MAX_TRIES  # noqa: E402
 
 

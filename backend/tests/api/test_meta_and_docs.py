@@ -37,8 +37,27 @@ async def test_meta_reports_demo_capabilities(settings_env: pytest.MonkeyPatch) 
     assert status == 200
     assert body == {
         "demo_mode": True, "ai_writing": False, "web_research": False,
-        "email_delivery": "console",
+        "email_delivery": "console", "ai_paused": False, "retention_days": 0,
     }
+
+
+async def test_meta_says_when_the_daily_ai_quota_is_spent(
+    settings_env: pytest.MonkeyPatch,
+) -> None:
+    settings_env.setenv("LLM_PROVIDER", "openai_compat")
+    settings_env.setenv("LLM_API_KEY", "gsk_test")
+    settings_env.setenv("LLM_DAILY_CALL_LIMIT", "100")
+    settings_env.setenv("DEMO_RETENTION_DAYS", "7")
+    seen: list[int] = []
+
+    async def spent(_redis: object, limit: int) -> bool:
+        seen.append(limit)
+        return True
+
+    settings_env.setattr("app.api.v1.meta.ai_paused", spent)
+    _status, body = await _get("/api/v1/meta")
+    assert body["ai_writing"] is True and body["ai_paused"] is True
+    assert body["retention_days"] == 7 and seen == [100]
 
 
 async def test_meta_reports_where_application_emails_go(settings_env: pytest.MonkeyPatch) -> None:

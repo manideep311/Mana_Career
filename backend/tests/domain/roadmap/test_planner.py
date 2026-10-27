@@ -19,6 +19,7 @@ from app.models.learning import LearningRecommendation
 from app.models.match import SkillGap
 from app.models.skill import Skill
 from app.models.user import User
+from app.models.vector import EMBED_DIM
 
 
 async def _seed(db_session) -> tuple[User, LearningRecommendation]:
@@ -41,7 +42,7 @@ async def _seed(db_session) -> tuple[User, LearningRecommendation]:
         level="intermediate",
         cost="free",
         summary="Bootstrap a cluster by hand to learn every moving part.",
-        embedding=[0.1] * 1024,
+        embedding=[0.1] * EMBED_DIM,
     )
     db_session.add(resource)
     await db_session.flush()

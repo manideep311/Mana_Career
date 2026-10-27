@@ -12,6 +12,7 @@ from app.domain.agents.checkpointer import ensure_checkpointer_tables
 from app.worker.retry import MAX_TRIES
 from app.worker.tasks import (
     build_profile,
+    expire_demo_accounts,
     extract_resume,
     ingest_job,
     parse_resume,
@@ -58,9 +59,11 @@ class WorkerSettings:
     redis_settings = _redis_settings()
     on_startup = _on_startup
     on_shutdown = _on_shutdown
-    # Every 5 minutes, fail anything left in progress past its deadline.
+    # Every 5 minutes, fail anything left in progress past its deadline; every
+    # hour, delete demo accounts past DEMO_RETENTION_DAYS (a no-op when unset).
     cron_jobs: ClassVar[list[Any]] = [
-        cron(sweep_stuck_jobs, minute=set(range(0, 60, 5)), unique=True, timeout=120)
+        cron(sweep_stuck_jobs, minute=set(range(0, 60, 5)), unique=True, timeout=120),
+        cron(expire_demo_accounts, minute={23}, unique=True, timeout=600),
     ]
     # Small hosts (worker inside the API on 512 MB) lower this.
     max_jobs = _settings.worker_max_jobs

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings, get_settings
 from app.domain.generation.types import GenerationMeta, GenerationResult
-from app.domain.llm.provider import LLMMessage, LLMProvider
+from app.domain.llm.provider import LLMMessage, LLMProvider, provider_name
 
 PROMPT_VERSION = "gen-1"
 
@@ -45,7 +45,7 @@ class GenerationService:
             raise GenerationError(f"structured payload failed schema: {exc}") from exc
         meta = GenerationMeta(
             model=res.model,
-            provider=type(self._llm).__name__,
+            provider=provider_name(self._llm),
             prompt_version=prompt_version,
             prompt_hash=prompt_hash,
             input_tokens=res.input_tokens,

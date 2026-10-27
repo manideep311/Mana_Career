@@ -8,6 +8,14 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.models.vector import EMBED_DIM
+
+# Embedding models the "local" provider can run on the CPU, and the vector size
+# each one makes (EMBED_DIM must match).
+LOCAL_EMBED_MODELS: dict[str, int] = {"BAAI/bge-small-en-v1.5": 384}
+# Voyage's models return 1024-d vectors (the adapter asks for no other size).
+VOYAGE_EMBED_DIM = 1024
+
 # Values that must never sign a JWT in any environment: the development sentinel
 # that shipped in `.env.example`, and the placeholders people paste from docs.
 _PLACEHOLDER_SECRETS = frozenset(
@@ -74,14 +82,28 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = 1_048_576
 
     # Only providers with a shipped adapter are accepted: anything else fails at
-    # startup instead of inside a worker job.
-    llm_provider: Literal["fake", "anthropic"] = "fake"
+    # startup instead of inside a worker job. "openai_compat" is any
+    # OpenAI-compatible chat API: Groq's free plan by default.
+    llm_provider: Literal["fake", "anthropic", "openai_compat"] = "fake"
     anthropic_api_key: SecretStr | None = None
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "openai/gpt-oss-120b"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = Field(default=60.0, gt=0)
+    # How long reasoning models think before answering; "none" for models
+    # that don't take the parameter.
+    llm_reasoning_effort: Literal["none", "low", "medium", "high"] = "low"
+    # Model calls allowed per UTC day across all users; 0 = no cap. On a free
+    # quota this keeps the deterministic features up when the AI ones pause.
+    llm_daily_call_limit: int = Field(default=0, ge=0)
 
-    embeddings_provider: Literal["fake", "voyage"] = "fake"
+    embeddings_provider: Literal["fake", "voyage", "local"] = "fake"
     embed_model: str = "fake-embed-1"
     voyage_api_key: SecretStr | None = None
-    embed_dim: int = 1024
+    # The same EMBED_DIM the vector columns are built with (app/models/vector.py).
+    embed_dim: int = EMBED_DIM
+    # Where the local model is kept; unset = FASTEMBED_CACHE_PATH or a temp dir.
+    local_embed_cache_dir: str | None = None
 
     # "none" disables web research; the agent reports the step as skipped.
     search_provider: Literal["none", "fake", "tavily"] = "none"
@@ -119,9 +141,13 @@ class Settings(BaseSettings):
     llm_model_extraction: str = "claude-haiku-4-5-20251001"
     anthropic_model_fallback: str = "claude-sonnet-5"
 
-    # Explicit opt-in for a production deployment that runs without live AI
-    # providers. The UI reads it from /api/v1/meta and says so.
+    # A public demo: labelled in the UI, warns before résumé uploads, and can
+    # only email the applicant's own inbox. Production needs it to run on the
+    # fake providers; with real providers it's a choice, not a requirement.
     demo_mode: bool = False
+    # Delete accounts (and their résumés) this many days after sign-up; 0 keeps
+    # them. Résumés are personal data, so a public demo should set this.
+    demo_retention_days: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -133,8 +159,20 @@ class Settings(BaseSettings):
             )
         if self.llm_provider == "anthropic" and not _has_value(self.anthropic_api_key):
             raise ValueError("ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic")
-        if self.embeddings_provider == "voyage" and not _has_value(self.voyage_api_key):
-            raise ValueError("VOYAGE_API_KEY is required when EMBEDDINGS_PROVIDER=voyage")
+        if self.llm_provider == "openai_compat":
+            if not _has_value(self.llm_api_key):
+                raise ValueError(
+                    "LLM_API_KEY is required when LLM_PROVIDER=openai_compat "
+                    "(any value for a local server that ignores it)"
+                )
+            if not self.llm_base_url.startswith(("http://", "https://")):
+                raise ValueError("LLM_BASE_URL must start with http:// or https://")
+        self._validate_embeddings()
+        if self.demo_mode and self.email_provider == "smtp" and self.email_delivery == "live":
+            raise ValueError(
+                "A demo never emails employers: set EMAIL_DELIVERY=redirect "
+                "(or EMAIL_PROVIDER=console) while DEMO_MODE=true"
+            )
         if self.search_provider == "tavily" and not _has_value(self.search_api_key):
             raise ValueError("SEARCH_API_KEY is required when SEARCH_PROVIDER=tavily")
         if self.file_store == "supabase":
@@ -154,6 +192,28 @@ class Settings(BaseSettings):
         if self.env == "prod":
             self._validate_production()
         return self
+
+    def _validate_embeddings(self) -> None:
+        if self.embeddings_provider == "voyage":
+            if not _has_value(self.voyage_api_key):
+                raise ValueError("VOYAGE_API_KEY is required when EMBEDDINGS_PROVIDER=voyage")
+            if self.embed_dim != VOYAGE_EMBED_DIM:
+                raise ValueError(
+                    f"Voyage makes {VOYAGE_EMBED_DIM}-d vectors: set EMBED_DIM={VOYAGE_EMBED_DIM} "
+                    "and run `python -m app.reembed`"
+                )
+        if self.embeddings_provider == "local":
+            size = LOCAL_EMBED_MODELS.get(self.embed_model)
+            if size is None:
+                raise ValueError(
+                    "EMBED_MODEL must be one of the local models: "
+                    + ", ".join(LOCAL_EMBED_MODELS)
+                )
+            if self.embed_dim != size:
+                raise ValueError(
+                    f"{self.embed_model} makes {size}-d vectors: set EMBED_DIM={size} "
+                    "and run `python -m app.reembed`"
+                )
 
     def _validate_production(self) -> None:
         if len(self.jwt_secret.get_secret_value()) < _PROD_MIN_SECRET_CHARS:
@@ -179,6 +239,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SMTP_SECURITY=none is only for local test servers, not production"
             )
+        if self.llm_provider == "openai_compat" and not self.llm_base_url.startswith("https://"):
+            raise ValueError("LLM_BASE_URL must use https in production")
         fakes = [
             name
             for name, value in (

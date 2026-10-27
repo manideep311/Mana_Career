@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
+from app.core.errors import AIUnavailableError
 from app.core.events import job_channel, publish_status
 from app.core.logging import get_logger
 from app.core.redis import redis_from_settings
@@ -225,16 +226,21 @@ async def ingest_job(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
         except Exception as exc:
             await session.rollback()
             retry_or_fail(ctx, exc, task="ingest_job")
+            message = (
+                exc.title
+                if isinstance(exc, AIUnavailableError)
+                else "We couldn't read this job posting."
+            )
             job = await session.get(Job, jid)
             if job is not None:
                 job.status = "failed"
-                job.ingest_error = "We couldn't read this job posting."
+                job.ingest_error = message
                 await session.commit()
             # A Redis outage here must not swallow the dead-letter record.
             with contextlib.suppress(Exception):
                 await publish_status(
                     redis, channel, resource="job", id=job_id,
-                    status="failed", message="We couldn't read this job posting.",
+                    status="failed", message=message,
                 )
             await record_failure("ingest_job", args=(job_id,), kwargs={}, error=exc)
             raise

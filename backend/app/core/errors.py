@@ -64,6 +64,30 @@ class RateLimitedError(AppError):
         self.retry_after = retry_after
 
 
+class AIUnavailableError(AppError):
+    """A model call can't run right now (the provider is rate limiting or down).
+
+    The message is safe to show as-is: it never carries the upstream response.
+    Features that don't need the model keep working.
+    """
+
+    status, code, title = 503, "ai_busy", "The free AI quota is busy, try again shortly"
+
+    def __init__(self, detail: str | None = None, *, retry_after: int | None = None) -> None:
+        super().__init__(detail)
+        self.retry_after = retry_after
+
+
+class AIPausedError(AIUnavailableError):
+    """This deployment's daily cap on model calls is used up (see LLM_DAILY_CALL_LIMIT)."""
+
+    status, code, title = (
+        503,
+        "ai_paused",
+        "AI features are paused for today: the free daily quota is used up",
+    )
+
+
 _STATUS_TO_ERROR: dict[int, type[AppError]] = {
     401: AuthError,
     403: ForbiddenError,
@@ -91,6 +115,8 @@ def to_problem(exc: AppError, *, instance: str) -> dict[str, Any]:
 def _response(exc: AppError, instance: str) -> JSONResponse:
     headers: dict[str, str] = {}
     if isinstance(exc, RateLimitedError):
+        headers["Retry-After"] = str(exc.retry_after)
+    elif isinstance(exc, AIUnavailableError) and exc.retry_after is not None:
         headers["Retry-After"] = str(exc.retry_after)
     return JSONResponse(
         status_code=exc.status,

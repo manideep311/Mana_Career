@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+from app.models.vector import EMBED_DIM
 
 
 class ResumeVersion(Base, TimestampMixin):
@@ -101,10 +102,9 @@ class ResumeChunk(Base, TimestampMixin):
         String(80), nullable=False, server_default=text("'fake-embed-1'")
     )
     embed_dim: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("1024")
+        Integer, nullable=False, server_default=text(str(EMBED_DIM))
     )
-    # The literal dim must stay in sync with app/core/config.py `embed_dim` and the migration.
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM))
     content_tsv: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )

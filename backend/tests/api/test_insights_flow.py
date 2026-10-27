@@ -26,6 +26,7 @@ from app.models.learning import LearningResource
 from app.models.match import JobMatch, SkillGap
 from app.models.skill import Skill
 from app.models.user import User
+from app.models.vector import EMBED_DIM
 
 _INSIGHTS_KEYS = {
     "strengths",
@@ -78,7 +79,7 @@ async def test_insights_end_to_end(client, db_session):
         level="beginner",
         cost="free",
         summary="Ship production Python with confidence.",
-        embedding=[0.0] * 1024,
+        embedding=[0.0] * EMBED_DIM,
         is_active=True,
     )
     db_session.add_all([job_a, job_b, resource])

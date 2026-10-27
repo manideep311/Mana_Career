@@ -47,6 +47,10 @@ prod-logs:
 seed:
     docker compose -f compose.prod.yml run --rm migrate python -m app.seed all
 
+# Recompute every stored vector after changing EMBEDDINGS_PROVIDER, EMBED_MODEL or EMBED_DIM.
+reembed:
+    docker compose -f compose.prod.yml run --rm migrate python -m app.reembed
+
 backup:
     ./scripts/backup.sh
 

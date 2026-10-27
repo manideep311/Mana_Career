@@ -19,6 +19,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin
+from app.models.vector import EMBED_DIM
 
 
 class LearningResource(Base, TimestampMixin):
@@ -58,9 +59,7 @@ class LearningResource(Base, TimestampMixin):
     est_hours: Mapped[int | None] = mapped_column(Integer)
     cost: Mapped[str] = mapped_column(String(10), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
-    # The literal dim must stay in sync with app/core/config.py `embed_dim`
-    # (default 1024) and the migration's Vector(1024).
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBED_DIM))
     is_active: Mapped[bool] = mapped_column(
         nullable=False, server_default=text("true")
     )

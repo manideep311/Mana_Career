@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models.job import Job, JobChunk
 from app.models.user import User
+from app.models.vector import EMBED_DIM
 
 
 async def _user(db_session, email="job@example.com"):
@@ -52,9 +53,11 @@ async def test_job_chunk_unique_index_and_cascade(db_session):
     db_session.add(job)
     await db_session.flush()
     db_session.add(JobChunk(job_id=job.id, chunk_index=0, section="description",
-                            content="c", token_count=1, embed_model="fake-embed-1", embed_dim=1024))
+                            content="c", token_count=1, embed_model="fake-embed-1",
+                            embed_dim=EMBED_DIM))
     await db_session.flush()
     db_session.add(JobChunk(job_id=job.id, chunk_index=0, section="description",
-                            content="d", token_count=1, embed_model="fake-embed-1", embed_dim=1024))
+                            content="d", token_count=1, embed_model="fake-embed-1",
+                            embed_dim=EMBED_DIM))
     with pytest.raises(IntegrityError):
         await db_session.flush()

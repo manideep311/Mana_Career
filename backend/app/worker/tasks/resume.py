@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.db import AsyncSessionLocal
+from app.core.errors import AIPausedError, AIUnavailableError
 from app.core.events import publish_status, resume_channel
 from app.core.queue import enqueue
 from app.core.redis import redis_from_settings
 from app.domain.llm.factory import get_llm_provider
-from app.domain.resume.extractor import ResumeExtractor
+from app.domain.resume.extractor import ResumeExtraction, ResumeExtractor
 from app.domain.resume.parser import (
     MIN_DIGITAL_TEXT_CHARS,
     SCANNED_PDF_MESSAGE,
@@ -187,7 +188,12 @@ async def extract_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
             extractor = ResumeExtractor(
                 get_llm_provider(settings), model=settings.llm_model_extraction
             )
-            extraction = await extractor.extract(resume.extracted_text or "")
+            try:
+                extraction = await extractor.extract(resume.extracted_text or "")
+            except AIPausedError:
+                # The day's AI quota is spent: read what the text itself shows
+                # (as in demo mode) rather than fail the upload.
+                extraction = ResumeExtraction()
             # Fill what the extractor left empty from the text itself: in demo
             # mode (no AI model) this is how skills and links get found at all.
             extraction = complete_from_text(extraction, resume.extracted_text or "")
@@ -207,10 +213,15 @@ async def extract_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
         except Exception as exc:
             await session.rollback()
             retry_or_fail(ctx, exc, task="extract_resume")
+            message = (
+                exc.title
+                if isinstance(exc, AIUnavailableError)
+                else "We couldn't understand this résumé. Try re-uploading."
+            )
             resume = await session.get(Resume, rid)
             if resume is not None:
                 resume.status = "failed"
-                resume.parse_error = "We couldn't understand this résumé. Try re-uploading."
+                resume.parse_error = message
                 await session.commit()
             # A Redis outage here must not swallow the dead-letter record.
             with contextlib.suppress(Exception):
@@ -220,7 +231,7 @@ async def extract_resume(ctx: dict[str, Any], resume_id: str) -> dict[str, Any]:
                     resource="resume",
                     id=resume_id,
                     status="failed",
-                    message="We couldn't understand this résumé. Try re-uploading.",
+                    message=message,
                 )
             await record_failure("extract_resume", args=(resume_id,), kwargs={}, error=exc)
             raise

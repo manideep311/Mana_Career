@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 from arq.worker import Retry
 
-from app.core.errors import AppError, NotFoundError, ValidationAppError
+from app.core.errors import (
+    AIPausedError,
+    AIUnavailableError,
+    AppError,
+    NotFoundError,
+    ValidationAppError,
+)
 from app.worker.retry import MAX_TRIES, backoff_seconds, is_retryable, retry_or_fail
 
 
@@ -47,3 +53,16 @@ def test_llm_upstream_errors_stay_retryable() -> None:
     assert is_retryable(exc)
     with pytest.raises(Retry):
         retry_or_fail({"job_try": 1}, exc, task="t")
+
+
+def test_a_busy_ai_quota_is_retried() -> None:
+    exc = AIUnavailableError(retry_after=4)
+    assert is_retryable(exc)
+    with pytest.raises(Retry):
+        retry_or_fail({"job_try": 1}, exc, task="t")
+
+
+def test_a_used_up_daily_ai_cap_is_not_retried() -> None:
+    # The cap resets tomorrow; retrying within the backoff window can't help.
+    assert not is_retryable(AIPausedError())
+    assert retry_or_fail({"job_try": 1}, AIPausedError(), task="t") is None

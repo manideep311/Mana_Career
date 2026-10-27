@@ -21,8 +21,7 @@ TYPED = {
     "CORS_ORIGINS": "https://mana-career.vercel.app",
     "SUPABASE_URL": "https://ref.supabase.co",
     "SUPABASE_SERVICE_ROLE_KEY": "service-role-key",
-    "ANTHROPIC_API_KEY": "anthropic-key",
-    "VOYAGE_API_KEY": "voyage-key",
+    "LLM_API_KEY": "gsk_groq-key",
     "SMTP_HOST": "smtp.resend.com",
     "SMTP_PORT": "2587",
     "SMTP_USERNAME": "resend",
@@ -59,7 +58,7 @@ def test_queue_is_private_and_never_evicts_jobs():
 
 def test_secrets_are_typed_into_render_not_committed():
     env = {e["key"]: e for e in _service("web")["envVars"]}
-    for key in ("DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SMTP_PASSWORD"):
+    for key in ("DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SMTP_PASSWORD", "LLM_API_KEY"):
         assert env[key] == {"key": key, "sync": False}
     assert env["JWT_SECRET"].get("generateValue") is True
     assert env["PROXY_SHARED_SECRET"].get("generateValue") is True
@@ -82,8 +81,22 @@ def test_the_blueprint_values_pass_production_checks(monkeypatch: pytest.MonkeyP
 
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.env == "prod" and s.run_worker_in_api and s.file_store == "supabase"
-    # The free setup runs as a clearly labelled demo, with no AI keys to enter.
-    assert s.demo_mode and not s.ai_generation_enabled
+    # The free setup runs a real model (Groq) and real embeddings (on the CPU),
+    # as a labelled public demo that forgets its visitors after a week.
+    assert (s.llm_provider, s.llm_base_url) == ("openai_compat", "https://api.groq.com/openai/v1")
+    assert s.ai_generation_enabled and s.llm_daily_call_limit > 0
+    assert (s.embeddings_provider, s.embed_model, s.embed_dim) == (
+        "local", "BAAI/bge-small-en-v1.5", 384,
+    )
+    assert s.demo_mode and s.demo_retention_days == 7
     assert (s.smtp_host, s.smtp_port) == ("smtp-relay.brevo.com", 2525)
+    # The demo's agent can only ever email the applicant's own inbox.
     assert s.email_delivery == "redirect"
     assert s.database_pool_size + s.database_max_overflow <= 5
+
+
+def test_the_embedding_model_is_baked_into_the_image():
+    dockerfile = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    env = {e["key"]: e.get("value") for e in _service("web")["envVars"]}
+    assert f"ARG LOCAL_EMBED_MODEL={env['EMBED_MODEL']}" in dockerfile
+    assert "HF_HUB_OFFLINE=1" in dockerfile

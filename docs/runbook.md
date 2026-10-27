@@ -31,8 +31,14 @@ just init-env        # or: bash ./scripts/init-env.sh
 #   compose.prod.yml always runs the backend with ENV=prod, which refuses to
 #   start on placeholder secrets, insecure cookies, wildcard CORS, or fake AI
 #   providers. Then choose ONE of:
-#     Real providers:  LLM_PROVIDER=anthropic   + ANTHROPIC_API_KEY=...
-#                      EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...
+#     Real providers (free):  LLM_PROVIDER=openai_compat + LLM_API_KEY=<Groq key>
+#                             EMBEDDINGS_PROVIDER=local
+#                             EMBED_MODEL=BAAI/bge-small-en-v1.5  EMBED_DIM=384
+#     ...or paid:             LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY=...
+#                             EMBEDDINGS_PROVIDER=voyage + VOYAGE_API_KEY=...
+#                             EMBED_DIM=1024
+#     After changing the embeddings provider, model or EMBED_DIM on a
+#     database that has data: just reembed
 #     Labelled demo:   DEMO_MODE=true   (keeps the fake providers; the UI says so)
 #   Optional:          SEARCH_PROVIDER=tavily + SEARCH_API_KEY=...  (web research)
 #   Network (defaults are fine): PROXY_SUBNET, NGINX_PROXY_IP, PROXY_DYNAMIC_RANGE

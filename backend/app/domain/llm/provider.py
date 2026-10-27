@@ -39,3 +39,11 @@ class LLMProvider(Protocol):
     ) -> LLMResult: ...
 
     def capabilities(self) -> LLMCapabilities: ...
+
+
+def provider_name(llm: LLMProvider) -> str:
+    """The adapter's class name, looking through wrappers such as the daily cap."""
+    inner: object = llm
+    while hasattr(inner, "wrapped"):
+        inner = inner.wrapped
+    return type(inner).__name__

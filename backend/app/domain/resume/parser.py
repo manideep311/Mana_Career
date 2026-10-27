@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Protocol
@@ -13,6 +14,8 @@ from app.core.config import Settings
 from app.core.errors import ValidationAppError
 
 MIN_DIGITAL_TEXT_CHARS = 120
+# Every PDFium call in this process goes through this lock (see _sync_parse).
+_PDFIUM_LOCK = threading.Lock()
 
 # One source of truth for the "this PDF has no extractable text" message, shared
 # by the OCR stub and the worker's scanned-PDF branch.
@@ -111,6 +114,13 @@ class Pdfium2ResumeParser:
 
     @staticmethod
     def _sync_parse(data: bytes) -> ParsedResume:
+        # PDFium is not thread-safe: two parses at once in to_thread workers
+        # crash the whole process (SIGSEGV), so they take turns.
+        with _PDFIUM_LOCK:
+            return Pdfium2ResumeParser._read(data)
+
+    @staticmethod
+    def _read(data: bytes) -> ParsedResume:
         try:
             doc = pdfium.PdfDocument(data)
         except pdfium.PdfiumError as exc:
