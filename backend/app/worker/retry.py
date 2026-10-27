@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 from arq.worker import Retry
 
 from app.core.errors import (
+    AIPausedError,
     AuthError,
     ConflictError,
     ForbiddenError,
@@ -33,9 +34,12 @@ BASE_DELAY_SECONDS = 5
 MAX_DELAY_SECONDS = 60
 
 # Deterministic domain failures: another attempt would fail the same way.
-# (LLM transport errors arrive as AppError("llm.upstream_error") and stay
-# retryable.)
-_PERMANENT = (ValidationAppError, NotFoundError, ConflictError, AuthError, ForbiddenError)
+# (LLM transport errors arrive as AppError("llm.upstream_error") or
+# AIUnavailableError and stay retryable; a used-up daily cap does not clear
+# within the backoff window.)
+_PERMANENT = (
+    ValidationAppError, NotFoundError, ConflictError, AuthError, ForbiddenError, AIPausedError,
+)
 
 
 def attempt(ctx: dict[str, Any]) -> int:
