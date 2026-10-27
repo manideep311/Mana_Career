@@ -5,6 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.errors import AppError
 from app.domain.llm.provider import LLMMessage, LLMProvider, LLMResult
 
+# Field descriptions travel to the model with the JSON schema. Without this
+# one, a real model (Groq gpt-oss-120b) kept the tech names from the bullet
+# lines but returned no highlights, leaving letters nothing to ground claims in.
+_HIGHLIGHTS = "Every achievement or bullet line under this entry, copied word for word."
+
 
 class ExtractedExperience(BaseModel):
     company: str
@@ -15,7 +20,7 @@ class ExtractedExperience(BaseModel):
     is_current: bool = False
     location: str | None = None
     description: str | None = None
-    highlights: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list, description=_HIGHLIGHTS)
     tech: list[str] = Field(default_factory=list)
 
 
@@ -32,7 +37,7 @@ class ExtractedProject(BaseModel):
     name: str
     description: str | None = None
     url: str | None = None
-    highlights: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list, description=_HIGHLIGHTS)
     tech: list[str] = Field(default_factory=list)
     start_date: str | None = None
     end_date: str | None = None
@@ -66,9 +71,11 @@ class ResumeExtraction(BaseModel):
 
 EXTRACTION_SYSTEM_PROMPT = (
     "Extract resume information from the provided text. Return only facts "
-    "explicitly stated; do not infer or guess. For any information not present, "
-    "use null for optional fields or empty lists for arrays. Always include "
-    "every field in your response, even if null or empty."
+    "explicitly stated; do not infer or guess. Copy each achievement or bullet "
+    "line under a role or project into that entry's highlights, word for word. "
+    "For any information not present, use null for optional fields or empty "
+    "lists for arrays. Always include every field in your response, even if null "
+    "or empty."
 )
 
 
