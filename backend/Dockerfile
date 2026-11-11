@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.15-slim AS base
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 UV_LINK_MODE=copy
 # Apply Debian security fixes published since the base image was built (the
 # image scan in CI fails on fixable HIGH/CRITICAL findings).
